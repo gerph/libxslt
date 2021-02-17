@@ -1,0 +1,53 @@
+# Project:   xsltproc
+
+LIBXML2_VERSION = 2/6/0
+
+# Toolflags:
+CCflags = -Wc -fa -c -depend !Depend -I@.,libxslt.,C:,^.^.libxml2-$(LIBXML2_VERSION).RISCOS.include. -throwback
+CCflags_26 = -apcs 3/26/fpe2/fp/nofpr $(CCflags)
+CCflags_32 = -apcs 3/32/fpe2/fp/nofpr $(CCflags)
+Linkflags = -aif -o $@
+LibFileflags = -c -o $@
+
+ODIR = o32
+
+VPATH =  xsltproc
+
+# Final targets:
+
+LIBS = C:o.stubsG \
+       ^.^.libxml2-$(LIBXML2_VERSION).RISCOS.$(ODIR).libxml \
+       libxslt.$(ODIR).libxslt \
+       libexslt.$(ODIR).libexslt
+
+aif.xsltproc:  $(ODIR).xsltproc $(ODIR).throwback $(LIBS)
+        link $(linkflags) $(ODIR).xsltproc $(ODIR).throwback $(LIBS)
+        squeeze $@
+
+libxslt.$(ODIR).libxslt:
+        dir libxslt
+        -amu LIBXML2_VERSION=$(LIBXML2_VERSION) $(ODIR).libxslt
+        dir ^
+
+libexslt.$(ODIR).libexslt:
+        dir libexslt
+        -amu LIBXML2_VERSION=$(LIBXML2_VERSION) $(ODIR).libexslt
+        dir ^
+
+breakpoint.$(ODIR).breakpoint:
+        dir breakpoint
+        -amu LIBXML2_VERSION=$(LIBXML2_VERSION) $(ODIR).breakpoint
+        dir ^
+
+
+# User-editable dependencies:
+
+# Static dependencies:
+.SUFFIXES: .o .o32 .c
+.c.o:;   cc $(ccflags_26) -o $@ $<
+.c.o32:; cc $(ccflags_32) -o $@ $<
+
+
+# Dynamic dependencies:
+o32.throwback: xsltproc.c.throwback C:h.kernel xsltproc.h.throwback
+o32.xsltproc: xsltproc.c.xsltproc libxslt.h.libxslt libxslt.h.config libxslt.h.xsltconfig ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlexports libexslt.h.exslt ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlregexp ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlmemory ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.threads ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.globals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.dict ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.hash ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.valid ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.list ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlautomata ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlregexp ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlregexp ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.entities ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.encoding ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlIO ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.globals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.encoding ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.globals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.SAX ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xlink ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.SAX2 ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xlink ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlmemory ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.threads ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.globals libexslt.h.exsltexports libexslt.h.exsltconfig ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlmemory ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.debugXML ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xpath ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.hash ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.HTMLtree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.HTMLparser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlIO ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.DOCBparser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parserInternals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.HTMLparser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.chvalid ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xinclude ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.catalog ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parserInternals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.uri ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlversion ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree libxslt.h.xslt ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree libxslt.h.xsltexports libxslt.h.xsltInternals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.hash ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xpath ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser libxslt.h.xslt libxslt.h.xsltexports libxslt.h.numbersInternals ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree libxslt.h.xsltexports libxslt.h.transform ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlIO libxslt.h.xsltexports libxslt.h.xsltInternals libxslt.h.xsltutils libxslt.h.xsltconfig ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xpath ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xmlerror ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.parser libxslt.h.xsltexports libxslt.h.xsltInternals libxslt.h.extensions ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.xpath libxslt.h.xsltexports libxslt.h.xsltInternals libxslt.h.security ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.tree ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.riscos libxslt.h.xsltexports libxslt.h.xsltInternals libexslt.h.exsltconfig ^.^.libxml2-2/6/0.RISCOS.include.libxml.h.riscos xsltproc.h.throwback

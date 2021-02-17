@@ -1,0 +1,70 @@
+| !MkRelease
+| Build a release
+Dir <Obey$Dir>
+
+x wipe diffs ~c~vfr
+x wipe Src   ~c~vfr
+
+Obey <Obey$Dir>.!~Setup
+echo [Diff files]
+Obey !~Diff
+| 
+cdir Src
+cdir Src.o
+cdir Src.aif
+cdir Src.breakpoint
+cdir Src.breakpoint.o
+cdir Src.libxslt
+cdir Src.libxslt.o
+cdir Src.libexslt
+cdir Src.libexslt.o
+cdir Src.xsltproc
+cdir Src.xsltproc.o
+cdir Src.doc
+cdir Src.doc.html
+cdir XML
+cdir XML.Help
+| 
+echo [Copy source]
+Alias CopySource Copy RISCOS.%%0 Src.%%0 ~C~VFR~D
+CopySource breakpoint.c
+CopySource breakpoint.h
+CopySource breakpoint.Makefile
+CopySource libexslt.c
+CopySource libexslt.h
+CopySource libexslt.Makefile
+CopySource libxslt.c
+CopySource libxslt.h
+CopySource libxslt.Makefile
+CopySource xsltproc.c
+CopySource xsltproc.h
+| CopySource xsltproc.Makefile
+CopySource Makefile
+
+| Build the binaries
+echo [Build binaries]
+dir RISCOS
+amu aif.xsltproc
+
+| Now create the directories into which we will install them
+copy aif.xsltproc   ^.XML.xsltproc   ~C~VF~Q
+
+| Return to our root
+dir ^
+
+| Copy the documentation
+echo [Copy documentation]
+Alias apply Copy <ThisOriginal>.doc.%%0 Src.doc.%%0 ~C~V~DF
+Alias strip x Wipe Src.doc.%%0 ~C~VF
+
+apply *
+apply html
+strip Makefile/am
+strip Makefile/in
+strip site/xsl
+strip html.index/sgml
+
+| Final stage generate archives
+Obey <Obey$Dir>.!MkReleaseArchives
+
+Echo [Built release]

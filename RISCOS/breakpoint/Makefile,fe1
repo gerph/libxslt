@@ -1,0 +1,27 @@
+# Project:   breakpoint
+
+# Toolflags:
+CCflags = -Wc -fa -c -depend !Depend -I^.,^.libxslt.,C:,^.^.^.libxml2-$(LIBXML2_VERSION).RISCOS.include. -throwback
+CCflags_26 = -apcs 3/26/fpe2/fp/nofpr $(CCflags)
+CCflags_32 = -apcs 3/32/fpe2/fp/nofpr $(CCflags)
+Linkflags = -aif -o $@
+LibFileflags = -c -o $@
+
+ODIR = o32
+
+# Final targets:
+LIBOBJS = $(ODIR).deprecated
+
+$(ODIR).breakpoint:  $(LIBOBJS)
+        libfile $(libfileflags) $(LIBOBJS)
+
+
+# User-editable dependencies:
+
+# Static dependencies:
+.SUFFIXES: .o .o32 .c
+.c.o:;   cc $(ccflags_26) -o $@ $<
+.c.o32:; cc $(ccflags_32) -o $@ $<
+
+
+# Dynamic dependencies:

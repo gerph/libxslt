@@ -1,0 +1,92 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>keys</title><meta name="generator" content="DocBook XSL Stylesheets V1.58.1"><style xmlns="http://www.w3.org/TR/xhtml1/transitional" type="text/css">
+        .synopsis, .classsynopsis {
+            background: #eeeeee;
+            border: solid 1px #aaaaaa;
+            padding: 0.5em;
+        }
+        .programlisting {
+            background: #eeeeff;
+            border: solid 1px #aaaaff;
+            padding: 0.5em;
+        }
+        .variablelist {
+            padding: 4px;
+            margin-left: 3em;
+        }
+        .navigation {
+            background: #ffeeee;
+            border: solid 1px #ffaaaa;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        .navigation a {
+            color: #770000;
+        }
+        .navigation a:visited {
+            color: #550000;
+        }
+        .navigation .title {
+            font-size: 200%;
+        }
+      </style><link rel="home" href="index.html" title="Gnome XSLT Library Reference Manual"><link rel="up" href="libxslt-lib.html" title="Libxslt Library Reference"><link rel="previous" href="libxslt-variables.html" title="variables"><link rel="next" href="libxslt-xsltInternals.html" title="xsltInternals"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><table xmlns="http://www.w3.org/TR/xhtml1/transitional" class="navigation" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2"><tr valign="middle"><td><a accesskey="p" href="libxslt-variables.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></img></a></td><td><a accesskey="u" href="libxslt-lib.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></img></a></td><td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></img></a></td><th width="100%" align="center">Gnome XSLT Library Reference Manual</th><td><a accesskey="n" href="libxslt-xsltInternals.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></img></a></td></tr></table><div class="refentry" lang="en"><a name="libxslt-keys"></a><div class="titlepage"></div><div class="refnamediv"><h2>keys</h2><p>keys &#8212; </p></div><div class="refsynopsisdiv"><h2>Synopsis</h2><pre class="synopsis">
+
+
+
+int         <a href="libxslt-keys.html#xsltAddKey">xsltAddKey</a>                      (<a href="libxslt-xsltInternals.html#xsltStylesheetPtr">xsltStylesheetPtr</a> style,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *name,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *nameURI,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *match,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *use,
+                                             <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlNodePtr">xmlNodePtr</GTKDOCLINK> inst);
+<GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlNodeSetPtr">xmlNodeSetPtr</GTKDOCLINK> <a href="libxslt-keys.html#xsltGetKey">xsltGetKey</a>                    (<a href="libxslt-xsltInternals.html#xsltTransformContextPtr">xsltTransformContextPtr</a> ctxt,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *name,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *nameURI,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *value);
+void        <a href="libxslt-keys.html#xsltInitCtxtKeys">xsltInitCtxtKeys</a>                (<a href="libxslt-xsltInternals.html#xsltTransformContextPtr">xsltTransformContextPtr</a> ctxt,
+                                             <a href="libxslt-xsltInternals.html#xsltDocumentPtr">xsltDocumentPtr</a> doc);
+void        <a href="libxslt-keys.html#xsltFreeKeys">xsltFreeKeys</a>                    (<a href="libxslt-xsltInternals.html#xsltStylesheetPtr">xsltStylesheetPtr</a> style);
+void        <a href="libxslt-keys.html#xsltFreeDocumentKeys">xsltFreeDocumentKeys</a>            (<a href="libxslt-xsltInternals.html#xsltDocumentPtr">xsltDocumentPtr</a> doc);
+</pre></div><div class="refsect1" lang="en"><h2>Description</h2><p>
+
+</p></div><div class="refsect1" lang="en"><h2>Details</h2><div class="refsect2" lang="en"><h3><a name="xsltAddKey"></a>xsltAddKey ()</h3><pre class="programlisting">int         xsltAddKey                      (<a href="libxslt-xsltInternals.html#xsltStylesheetPtr">xsltStylesheetPtr</a> style,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *name,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *nameURI,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *match,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *use,
+                                             <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlNodePtr">xmlNodePtr</GTKDOCLINK> inst);</pre><p>
+add a key definition to a stylesheet</p><p>
+
+</p><div class="variablelist"><table border="0"><col align="left" valign="top"><tbody><tr><td><span class="term"><i><tt>style</tt></i> :</span></td><td> an XSLT stylesheet
+</td></tr><tr><td><span class="term"><i><tt>name</tt></i> :</span></td><td>  the key name or NULL
+</td></tr><tr><td><span class="term"><i><tt>nameURI</tt></i> :</span></td><td>  the name URI or NULL
+</td></tr><tr><td><span class="term"><i><tt>match</tt></i> :</span></td><td>  the match value
+</td></tr><tr><td><span class="term"><i><tt>use</tt></i> :</span></td><td>  the use value
+</td></tr><tr><td><span class="term"><i><tt>inst</tt></i> :</span></td><td> the key instruction
+</td></tr><tr><td><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></td><td>0 in case of success, and -1 in case of failure.
+</td></tr></tbody></table></div></div><hr xmlns="http://www.w3.org/TR/xhtml1/transitional"></hr><div class="refsect2" lang="en"><h3><a name="xsltGetKey"></a>xsltGetKey ()</h3><pre class="programlisting"><GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlNodeSetPtr">xmlNodeSetPtr</GTKDOCLINK> xsltGetKey                    (<a href="libxslt-xsltInternals.html#xsltTransformContextPtr">xsltTransformContextPtr</a> ctxt,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *name,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *nameURI,
+                                             const <GTKDOCLINK xmlns="http://www.w3.org/TR/xhtml1/transitional" HREF="xmlChar">xmlChar</GTKDOCLINK> *value);</pre><p>
+Lookup a key</p><p>
+
+</p><div class="variablelist"><table border="0"><col align="left" valign="top"><tbody><tr><td><span class="term"><i><tt>ctxt</tt></i> :</span></td><td> an XSLT transformation context
+</td></tr><tr><td><span class="term"><i><tt>name</tt></i> :</span></td><td>  the key name or NULL
+</td></tr><tr><td><span class="term"><i><tt>nameURI</tt></i> :</span></td><td>  the name URI or NULL
+</td></tr><tr><td><span class="term"><i><tt>value</tt></i> :</span></td><td>  the key value to look for
+</td></tr><tr><td><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></td><td>the nodeset resulting from the query or NULL
+</td></tr></tbody></table></div></div><hr xmlns="http://www.w3.org/TR/xhtml1/transitional"></hr><div class="refsect2" lang="en"><h3><a name="xsltInitCtxtKeys"></a>xsltInitCtxtKeys ()</h3><pre class="programlisting">void        xsltInitCtxtKeys                (<a href="libxslt-xsltInternals.html#xsltTransformContextPtr">xsltTransformContextPtr</a> ctxt,
+                                             <a href="libxslt-xsltInternals.html#xsltDocumentPtr">xsltDocumentPtr</a> doc);</pre><p>
+Computes all the keys tables for the current input document.
+Should be done before global varibales are initialized.</p><p>
+
+</p><div class="variablelist"><table border="0"><col align="left" valign="top"><tbody><tr><td><span class="term"><i><tt>ctxt</tt></i> :</span></td><td>  an XSLT transformation context
+</td></tr><tr><td><span class="term"><i><tt>doc</tt></i> :</span></td><td>  an XSLT document
+</td></tr></tbody></table></div></div><hr xmlns="http://www.w3.org/TR/xhtml1/transitional"></hr><div class="refsect2" lang="en"><h3><a name="xsltFreeKeys"></a>xsltFreeKeys ()</h3><pre class="programlisting">void        xsltFreeKeys                    (<a href="libxslt-xsltInternals.html#xsltStylesheetPtr">xsltStylesheetPtr</a> style);</pre><p>
+Free up the memory used by XSLT keys in a stylesheet</p><p>
+
+</p><div class="variablelist"><table border="0"><col align="left" valign="top"><tbody><tr><td><span class="term"><i><tt>style</tt></i> :</span></td><td> an XSLT stylesheet
+</td></tr></tbody></table></div></div><hr xmlns="http://www.w3.org/TR/xhtml1/transitional"></hr><div class="refsect2" lang="en"><h3><a name="xsltFreeDocumentKeys"></a>xsltFreeDocumentKeys ()</h3><pre class="programlisting">void        xsltFreeDocumentKeys            (<a href="libxslt-xsltInternals.html#xsltDocumentPtr">xsltDocumentPtr</a> doc);</pre><p>
+Free the keys associated to a document</p><p>
+
+</p><div class="variablelist"><table border="0"><col align="left" valign="top"><tbody><tr><td><span class="term"><i><tt>doc</tt></i> :</span></td><td> a XSLT document
+</td></tr></tbody></table></div></div></div></div><table xmlns="http://www.w3.org/TR/xhtml1/transitional" class="navigation" width="100%" summary="Navigation footer" cellpadding="2" cellspacing="0"><tr valign="middle"><td align="left"><a accesskey="p" href="libxslt-variables.html"><b>&lt;&lt; variables</b></a></td><td align="right"><a accesskey="n" href="libxslt-xsltInternals.html"><b>xsltInternals &gt;&gt;</b></a></td></tr></table></body></html>
