@@ -1,0 +1,68 @@
+#!/usr/bin/env riscos-amu -f
+# Makefile for libEXSLT library export
+#
+
+#
+# Program specific options:
+#
+COMPONENT  = libexslt
+TARGET     = libexslt
+
+# Specifies additional targets for startup
+#INITTARGET = inittarget
+
+# Specifies additional targets for clean
+#CLEANTARGET = cleantarget
+
+# Files to export as part of export_hdr or export_libs
+# To export to the library in a subdirectory, use an export like:
+#   ${EXP_LIB}.${COMPONENT}.h.myheader
+EXPORTS    = ${EXP_LIB}.${COMPONENT}.h.exslt \
+			 ${EXP_LIB}.${COMPONENT}.h.exsltconfig \
+			 ${EXP_LIB}.${COMPONENT}.h.exsltexports \
+			 ${EXP_LIB}.${COMPONENT}.h.libexslt \
+
+NO_EXPORT =  \
+
+# Comma-separated list of paths to use for includes, such as:
+#   <Lib$Dir>.LibName.
+INCLUDES   = C:libxml.,C:libxslt.
+
+# Space separated list of defines to set, eg -DDEBUG
+CDEFINES   =
+# Define this (and add in the C:o.zlib) to include ZLib support
+# CDEFINES += -DHAVE_ZLIB_H
+
+# Objects to build, using the format o.<name> (will be varied for build type)
+OBJS       = o.common \
+			 o.date \
+			 o.dynamic \
+			 o.exslt \
+			 o.functions \
+			 o.math \
+			 o.saxon \
+			 o.sets \
+			 o.strings \
+
+
+include LibExport
+
+
+# Ensure that the exports happen first
+${OBJTARGETS}: ${EXPORTS}
+
+
+# Export rules
+# For any files you export with EXPORTS you may need to include an
+# export rule
+${EXP_LIB}.${COMPONENT}.h.exslt: h.exslt
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.exsltconfig: h.exsltconfig
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.exsltexports: h.exsltexports
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.libexslt: h.libexslt
+		${CP} $? $@ ${CPFLAGS}
+
+#---------------------------------------------------------------------------
+# Dynamic dependencies:

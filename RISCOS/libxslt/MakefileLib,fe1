@@ -1,0 +1,134 @@
+#!/usr/bin/env riscos-amu -f
+# Makefile for libXSLT library export
+#
+
+#
+# Program specific options:
+#
+COMPONENT  = libxslt
+TARGET     = libxslt
+
+# Specifies additional targets for startup
+#INITTARGET = inittarget
+
+# Specifies additional targets for clean
+#CLEANTARGET = cleantarget
+
+# Files to export as part of export_hdr or export_libs
+# To export to the library in a subdirectory, use an export like:
+#   ${EXP_LIB}.${COMPONENT}.h.myheader
+EXPORTS    = ${EXP_LIB}.${COMPONENT}.h.attributes \
+			 ${EXP_LIB}.${COMPONENT}.h.config \
+			 ${EXP_LIB}.${COMPONENT}.h.documents \
+			 ${EXP_LIB}.${COMPONENT}.h.extensions \
+			 ${EXP_LIB}.${COMPONENT}.h.extra \
+			 ${EXP_LIB}.${COMPONENT}.h.functions \
+			 ${EXP_LIB}.${COMPONENT}.h.imports \
+			 ${EXP_LIB}.${COMPONENT}.h.keys \
+			 ${EXP_LIB}.${COMPONENT}.h.libxslt \
+			 ${EXP_LIB}.${COMPONENT}.h.namespaces \
+			 ${EXP_LIB}.${COMPONENT}.h.numbersInternals \
+			 ${EXP_LIB}.${COMPONENT}.h.pattern \
+			 ${EXP_LIB}.${COMPONENT}.h.preproc \
+			 ${EXP_LIB}.${COMPONENT}.h.security \
+			 ${EXP_LIB}.${COMPONENT}.h.templates \
+			 ${EXP_LIB}.${COMPONENT}.h.transform \
+			 ${EXP_LIB}.${COMPONENT}.h.variables \
+			 ${EXP_LIB}.${COMPONENT}.h.win32config \
+			 ${EXP_LIB}.${COMPONENT}.h.xslt \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltInternals \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltconfig \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltexports \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltutils \
+
+NO_EXPORT =  \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltwin32config \
+
+# Comma-separated list of paths to use for includes, such as:
+#   <Lib$Dir>.LibName.
+INCLUDES   = C:libxml.
+
+# Space separated list of defines to set, eg -DDEBUG
+CDEFINES   =
+# Define this (and add in the C:o.zlib) to include ZLib support
+# CDEFINES += -DHAVE_ZLIB_H
+
+# Objects to build, using the format o.<name> (will be varied for build type)
+OBJS       = o.attributes \
+			 o.documents \
+			 o.extensions \
+			 o.extra \
+			 o.functions \
+			 o.imports \
+			 o.keys \
+			 o.namespaces \
+			 o.numbers \
+			 o.pattern \
+			 o.preproc \
+			 o.security \
+			 o.templates \
+			 o.transform \
+			 o.variables \
+			 o.xslt \
+			 o.xsltutils \
+
+
+include LibExport
+
+
+# Ensure that the exports happen first
+${OBJTARGETS}: ${EXPORTS}
+
+
+# Export rules
+# For any files you export with EXPORTS you may need to include an
+# export rule
+${EXP_LIB}.${COMPONENT}.h.attributes: h.attributes
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.config: h.config
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.documents: h.documents
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.extensions: h.extensions
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.extra: h.extra
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.functions: h.functions
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.imports: h.imports
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.keys: h.keys
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.libxslt: h.libxslt
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.namespaces: h.namespaces
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.numbersInternals: h.numbersInternals
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.pattern: h.pattern
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.preproc: h.preproc
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.security: h.security
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.templates: h.templates
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.transform: h.transform
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.variables: h.variables
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.win32config: h.win32config
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xslt: h.xslt
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xsltInternals: h.xsltInternals
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xsltconfig: h.xsltconfig
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xsltexports: h.xsltexports
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xsltutils: h.xsltutils
+		${CP} $? $@ ${CPFLAGS}
+
+#---------------------------------------------------------------------------
+# Dynamic dependencies:
