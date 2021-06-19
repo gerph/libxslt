@@ -59,14 +59,13 @@
  * @style: the stylesheet being imported by the master
  *
  * normalize the comp steps for the stylesheet being imported
- * by the master, together with any imports within that. 
+ * by the master, together with any imports within that.
  *
  */
-static void xsltFixImportedCompSteps(xsltStylesheetPtr master, 
+static void xsltFixImportedCompSteps(xsltStylesheetPtr master,
 			xsltStylesheetPtr style) {
     xsltStylesheetPtr res;
-    xmlHashScan(style->templatesHash,
-	            (xmlHashScanner) xsltNormalizeCompSteps, master);
+    xmlHashScan(style->templatesHash, (xmlHashScanner)xsltNormalizeCompSteps, master);
     master->extrasNr += style->extrasNr;
     for (res = style->imports; res != NULL; res = res->next) {
         xsltFixImportedCompSteps(master, res);
@@ -230,7 +229,7 @@ xsltParseStylesheetInclude(xsltStylesheetPtr style, xmlNodePtr cur) {
 	    "xsl:include : unable to load %s\n", URI);
 	goto error;
     }
-#ifdef XSLT_REFACTORED    
+#ifdef XSLT_REFACTORED
     if (IS_XSLT_ELEM_FAST(cur) && (cur->psvi != NULL)) {
 	((xsltStyleItemIncludePtr) cur->psvi)->include = include;
     } else {
@@ -329,7 +328,7 @@ xsltNeedElemSpaceHandling(xsltTransformContextPtr ctxt) {
  * @ctxt:  an XSLT transformation context
  * @node:  an XML node
  *
- * Find strip-space or preserve-space informations for an element
+ * Find strip-space or preserve-space information for an element
  * respect the import precedence or the wildcards
  *
  * Returns 1 if space should be stripped, 0 if not, and 2 if everything
@@ -400,17 +399,12 @@ xsltFindTemplate(xsltTransformContextPtr ctxt, const xmlChar *name,
 	return(NULL);
     style = ctxt->style;
     while (style != NULL) {
-	cur = style->templates;
-	while (cur != NULL) {
-	    if (xmlStrEqual(name, cur->name)) {
-		if (((nameURI == NULL) && (cur->nameURI == NULL)) ||
-		    ((nameURI != NULL) && (cur->nameURI != NULL) &&
-		     (xmlStrEqual(nameURI, cur->nameURI)))) {
-		    return(cur);
-		}
-	    }
-	    cur = cur->next;
-	}
+        if (style->namedTemplates != NULL) {
+            cur = (xsltTemplatePtr)
+                xmlHashLookup2(style->namedTemplates, name, nameURI);
+            if (cur != NULL)
+                return(cur);
+        }
 
 	style = xsltNextImport(style);
     }

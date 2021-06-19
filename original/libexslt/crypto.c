@@ -1,7 +1,7 @@
 #define IN_LIBEXSLT
 #include "libexslt/libexslt.h"
 
-#if defined(WIN32) && !defined (__CYGWIN__) && (!__MINGW32__)
+#if defined(_WIN32) && !defined (__CYGWIN__) && (!__MINGW32__)
 #include <win32config.h>
 #else
 #include "config.h"
@@ -27,7 +27,7 @@
 #define MD5_DIGEST_LENGTH 16
 #define SHA1_DIGEST_LENGTH 20
 
-/* gcrypt rc4 can do 256 bit keys, but cryptoapi limit 
+/* gcrypt rc4 can do 256 bit keys, but cryptoapi limit
    seems to be 128 for the default provider */
 #define RC4_KEY_LENGTH 128
 
@@ -48,7 +48,7 @@
  * @hex: buffer to store hex version of blob
  * @hexlen: length of buffer to store hex version of blob
  *
- * Helper function which encodes a binary blob as hex. 
+ * Helper function which encodes a binary blob as hex.
  */
 static void
 exsltCryptoBin2Hex (const unsigned char *bin, int binlen,
@@ -109,7 +109,7 @@ exsltCryptoHex2Bin (const unsigned char *hex, int hexlen,
     return j;
 }
 
-#if defined(WIN32)
+#if defined(_WIN32) && !defined(__CYGWIN__)
 
 #define HAVE_CRYPTO
 #define PLATFORM_HASH	exsltCryptoCryptoApiHash
@@ -121,12 +121,14 @@ exsltCryptoHex2Bin (const unsigned char *hex, int hexlen,
 
 #include <windows.h>
 #include <wincrypt.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "advapi32.lib")
+#endif
 
 static void
 exsltCryptoCryptoApiReportError (xmlXPathParserContextPtr ctxt,
 				 int line) {
-    LPVOID lpMsgBuf;
+    char *lpMsgBuf;
     DWORD dw = GetLastError ();
 
     FormatMessage (FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -143,7 +145,7 @@ exsltCryptoCryptoApiReportError (xmlXPathParserContextPtr ctxt,
 static HCRYPTHASH
 exsltCryptoCryptoApiCreateHash (xmlXPathParserContextPtr ctxt,
 				HCRYPTPROV hCryptProv, ALG_ID algorithm,
-				const char *msg, unsigned int msglen,
+				const unsigned char *msg, unsigned int msglen,
 				char *dest, unsigned int destlen)
 {
     HCRYPTHASH hHash = 0;
@@ -154,12 +156,12 @@ exsltCryptoCryptoApiCreateHash (xmlXPathParserContextPtr ctxt,
 	return 0;
     }
 
-    if (!CryptHashData (hHash, (const BYTE *) msg, msglen, 0)) {
+    if (!CryptHashData (hHash, msg, msglen, 0)) {
 	exsltCryptoCryptoApiReportError (ctxt, __LINE__);
 	goto fail;
     }
 
-    if (!CryptGetHashParam (hHash, HP_HASHVAL, dest, &dwHashLen, 0)) {
+    if (!CryptGetHashParam (hHash, HP_HASHVAL, (BYTE *) dest, &dwHashLen, 0)) {
 	exsltCryptoCryptoApiReportError (ctxt, __LINE__);
 	goto fail;
     }
@@ -194,8 +196,8 @@ exsltCryptoCryptoApiHash (xmlXPathParserContextPtr ctxt,
     }
 
     hHash = exsltCryptoCryptoApiCreateHash (ctxt, hCryptProv,
-					    algorithm, msg, msglen,
-					    dest, HASH_DIGEST_LENGTH);
+					    algorithm, (unsigned char *) msg,
+                                            msglen, dest, HASH_DIGEST_LENGTH);
     if (0 != hHash) {
 	CryptDestroyHash (hHash);
     }
@@ -212,7 +214,7 @@ exsltCryptoCryptoApiRc4Encrypt (xmlXPathParserContextPtr ctxt,
     HCRYPTKEY hKey;
     HCRYPTHASH hHash;
     DWORD dwDataLen;
-    unsigned char hash[HASH_DIGEST_LENGTH];
+    char hash[HASH_DIGEST_LENGTH];
 
     if (msglen > destlen) {
 	xsltTransformError (xsltXPathGetTransformContext (ctxt), NULL,
@@ -263,7 +265,7 @@ exsltCryptoCryptoApiRc4Decrypt (xmlXPathParserContextPtr ctxt,
     HCRYPTKEY hKey;
     HCRYPTHASH hHash;
     DWORD dwDataLen;
-    unsigned char hash[HASH_DIGEST_LENGTH];
+    char hash[HASH_DIGEST_LENGTH];
 
     if (msglen > destlen) {
 	xsltTransformError (xsltXPathGetTransformContext (ctxt), NULL,
@@ -305,7 +307,7 @@ exsltCryptoCryptoApiRc4Decrypt (xmlXPathParserContextPtr ctxt,
     CryptReleaseContext (hCryptProv, 0);
 }
 
-#endif /* defined(WIN32) */
+#endif /* defined(_WIN32) */
 
 #if defined(HAVE_GCRYPT)
 
@@ -357,7 +359,7 @@ exsltCryptoGcryptInit (void) {
  * @msglen: length of text to be hashed
  * @dest: buffer to place hash result
  *
- * Helper function which hashes a message using MD4, MD5, or SHA1. 
+ * Helper function which hashes a message using MD4, MD5, or SHA1.
  * using gcrypt
  */
 static void
@@ -457,7 +459,8 @@ exsltCryptoGcryptRc4Decrypt (xmlXPathParserContextPtr ctxt,
  * @ctxt: an XPath parser context
  * @nargs: the number of arguments
  *
- * Helper function which checks for and returns first string argument and its length
+ * Helper function which checks for and returns first string argument and its
+ * length in bytes.
  */
 static int
 exsltCryptoPopString (xmlXPathParserContextPtr ctxt, int nargs,
@@ -471,7 +474,7 @@ exsltCryptoPopString (xmlXPathParserContextPtr ctxt, int nargs,
     }
 
     *str = xmlXPathPopString (ctxt);
-    str_len = xmlUTF8Strlen (*str);
+    str_len = xmlStrlen (*str);
 
     if (str_len == 0) {
 	xmlXPathReturnEmptyString (ctxt);
@@ -498,11 +501,8 @@ exsltCryptoMd4Function (xmlXPathParserContextPtr ctxt, int nargs) {
     unsigned char hex[MD5_DIGEST_LENGTH * 2 + 1];
 
     str_len = exsltCryptoPopString (ctxt, nargs, &str);
-    if (str_len == 0) {
-	xmlXPathReturnEmptyString (ctxt);
-	xmlFree (str);
+    if (str_len == 0)
 	return;
-    }
 
     PLATFORM_HASH (ctxt, PLATFORM_MD4, (const char *) str, str_len,
 		   (char *) hash);
@@ -531,11 +531,8 @@ exsltCryptoMd5Function (xmlXPathParserContextPtr ctxt, int nargs) {
     unsigned char hex[MD5_DIGEST_LENGTH * 2 + 1];
 
     str_len = exsltCryptoPopString (ctxt, nargs, &str);
-    if (str_len == 0) {
-	xmlXPathReturnEmptyString (ctxt);
-	xmlFree (str);
+    if (str_len == 0)
 	return;
-    }
 
     PLATFORM_HASH (ctxt, PLATFORM_MD5, (const char *) str, str_len,
 		   (char *) hash);
@@ -564,11 +561,8 @@ exsltCryptoSha1Function (xmlXPathParserContextPtr ctxt, int nargs) {
     unsigned char hex[SHA1_DIGEST_LENGTH * 2 + 1];
 
     str_len = exsltCryptoPopString (ctxt, nargs, &str);
-    if (str_len == 0) {
-	xmlXPathReturnEmptyString (ctxt);
-	xmlFree (str);
+    if (str_len == 0)
 	return;
-    }
 
     PLATFORM_HASH (ctxt, PLATFORM_SHA1, (const char *) str, str_len,
 		   (char *) hash);
@@ -591,7 +585,7 @@ exsltCryptoSha1Function (xmlXPathParserContextPtr ctxt, int nargs) {
 static void
 exsltCryptoRc4EncryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 
-    int key_len = 0, key_size = 0;
+    int key_len = 0;
     int str_len = 0, bin_len = 0, hex_len = 0;
     xmlChar *key = NULL, *str = NULL, *padkey = NULL;
     xmlChar *bin = NULL, *hex = NULL;
@@ -604,7 +598,7 @@ exsltCryptoRc4EncryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     tctxt = xsltXPathGetTransformContext(ctxt);
 
     str = xmlXPathPopString (ctxt);
-    str_len = xmlUTF8Strlen (str);
+    str_len = xmlStrlen (str);
 
     if (str_len == 0) {
 	xmlXPathReturnEmptyString (ctxt);
@@ -613,7 +607,7 @@ exsltCryptoRc4EncryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     }
 
     key = xmlXPathPopString (ctxt);
-    key_len = xmlUTF8Strlen (key);
+    key_len = xmlStrlen (key);
 
     if (key_len == 0) {
 	xmlXPathReturnEmptyString (ctxt);
@@ -632,15 +626,14 @@ exsltCryptoRc4EncryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     }
     memset(padkey, 0, RC4_KEY_LENGTH + 1);
 
-    key_size = xmlUTF8Strsize (key, key_len);
-    if ((key_size > RC4_KEY_LENGTH) || (key_size < 0)) {
+    if ((key_len > RC4_KEY_LENGTH) || (key_len < 0)) {
 	xsltTransformError(tctxt, NULL, tctxt->inst,
 	    "exsltCryptoRc4EncryptFunction: key size too long or key broken\n");
 	tctxt->state = XSLT_STATE_STOPPED;
 	xmlXPathReturnEmptyString (ctxt);
 	goto done;
     }
-    memcpy (padkey, key, key_size);
+    memcpy (padkey, key, key_len);
 
 /* encrypt it */
     bin_len = str_len;
@@ -689,7 +682,7 @@ done:
 static void
 exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 
-    int key_len = 0, key_size = 0;
+    int key_len = 0;
     int str_len = 0, bin_len = 0, ret_len = 0;
     xmlChar *key = NULL, *str = NULL, *padkey = NULL, *bin =
 	NULL, *ret = NULL;
@@ -702,7 +695,7 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     tctxt = xsltXPathGetTransformContext(ctxt);
 
     str = xmlXPathPopString (ctxt);
-    str_len = xmlUTF8Strlen (str);
+    str_len = xmlStrlen (str);
 
     if (str_len == 0) {
 	xmlXPathReturnEmptyString (ctxt);
@@ -711,7 +704,7 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     }
 
     key = xmlXPathPopString (ctxt);
-    key_len = xmlUTF8Strlen (key);
+    key_len = xmlStrlen (key);
 
     if (key_len == 0) {
 	xmlXPathReturnEmptyString (ctxt);
@@ -729,15 +722,14 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 	goto done;
     }
     memset(padkey, 0, RC4_KEY_LENGTH + 1);
-    key_size = xmlUTF8Strsize (key, key_len);
-    if ((key_size > RC4_KEY_LENGTH) || (key_size < 0)) {
+    if ((key_len > RC4_KEY_LENGTH) || (key_len < 0)) {
 	xsltTransformError(tctxt, NULL, tctxt->inst,
 	    "exsltCryptoRc4EncryptFunction: key size too long or key broken\n");
 	tctxt->state = XSLT_STATE_STOPPED;
 	xmlXPathReturnEmptyString (ctxt);
 	goto done;
     }
-    memcpy (padkey, key, key_size);
+    memcpy (padkey, key, key_len);
 
 /* decode hex to binary */
     bin_len = str_len;
@@ -752,7 +744,7 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     ret_len = exsltCryptoHex2Bin (str, str_len, bin, bin_len);
 
 /* decrypt the binary blob */
-    ret = xmlMallocAtomic (ret_len);
+    ret = xmlMallocAtomic (ret_len + 1);
     if (ret == NULL) {
 	xsltTransformError(tctxt, NULL, tctxt->inst,
 	    "exsltCryptoRc4EncryptFunction: Failed to allocate result\n");
@@ -761,6 +753,7 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 	goto done;
     }
     PLATFORM_RC4_DECRYPT (ctxt, padkey, bin, ret_len, ret, ret_len);
+    ret[ret_len] = 0;
 
     xmlXPathReturnString (ctxt, ret);
 
