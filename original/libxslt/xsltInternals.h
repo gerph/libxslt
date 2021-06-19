@@ -1,12 +1,13 @@
 /*
- * xsltInternals.h: internal data structures, constants and functions used
- *                  by the XSLT engine.
- *                  They are not part of the API or ABI, i.e. they can change
- *                  without prior notice, use carefully.
+ * Summary: internal data structures, constants and functions
+ * Description: Internal data structures, constants and functions used
+ *              by the XSLT engine. 
+ *              They are not part of the API or ABI, i.e. they can change
+ *              without prior notice, use carefully.
  *
- * See Copyright for the status of this software.
+ * Copy: See Copyright for the status of this software.
  *
- * daniel@veillard.com
+ * Author: Daniel Veillard
  */
 
 #ifndef __XML_XSLT_INTERNALS_H__
@@ -141,6 +142,7 @@ struct _xsltDocument {
     int main;			/* is this the main document */
     xmlDocPtr doc;		/* the parsed document */
     void *keys;			/* key tables storage */
+    struct _xsltDocument *includes; /* subsidiary includes */
 };
 
 typedef struct _xsltTransformContext xsltTransformContext;
@@ -414,6 +416,11 @@ struct _xsltStylesheet {
      */
     xmlHashTablePtr extInfos;	/* the extension data */
     int		    extrasNr;	/* the number of extras required */
+
+    /*
+     * For keeping track of nested includes
+     */
+    xsltDocumentPtr includes;	/* points to last nested include */
 };
 
 /*
@@ -513,6 +520,11 @@ struct _xsltTransformContext {
     const xmlChar  *lasttext;		/* last text node content */
     unsigned int    lasttsize;		/* last text node size */
     unsigned int    lasttuse;		/* last text node use */
+    /*
+     * Per Context Debugging
+     */
+    int debugStatus;				/* the context level debug status */
+    unsigned long* traceCode;		/* pointer to the variable holding the mask */
 };
 
 /**
@@ -567,7 +579,8 @@ XSLTPUBFUN void XSLTCALL
 XSLTPUBFUN xsltStylesheetPtr XSLTCALL	
 			xsltParseStylesheetDoc	(xmlDocPtr doc);
 XSLTPUBFUN xsltStylesheetPtr XSLTCALL	
-			xsltParseStylesheetImportedDoc(xmlDocPtr doc);
+			xsltParseStylesheetImportedDoc(xmlDocPtr doc,
+						xsltStylesheetPtr style);
 XSLTPUBFUN xsltStylesheetPtr XSLTCALL	
 			xsltLoadStylesheetPI	(xmlDocPtr doc);
 XSLTPUBFUN void XSLTCALL 			
