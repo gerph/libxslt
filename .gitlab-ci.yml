@@ -1,0 +1,84 @@
+# RISC OS CI build for libxslt.
+#
+
+
+#### Builds ####
+cross-compile:
+  # Builds using the cross-compiling toolchain
+  stage: build
+  script:
+
+    - |
+      cd RISCOS/libxslt
+      riscos-amu -f MakefileLib,fe1 export
+      cd ../libexslt
+      riscos-amu -f MakefileLib,fe1 export
+      cd ../xsltproc
+      riscos-amu -f MakefileTools,fe1
+      cd ../..
+
+    - |
+      mkdir -p Release/Tools
+      cp RISCOS/xsltproc/aif32/xsltproc,ff8 Release/Tools/xsltproc,ff8
+
+      mkdir -p Release/Libs
+      cp -R $LIB_DIR/libxslt Release/Libs/libxslt
+      cp -R $LIB_DIR/libexslt Release/Libs/libexslt
+      zip -9r ../archive.zip *
+
+    - |
+      version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
+      version=$version-$(git rev-parse --short HEAD)
+      echo "This is version: $version"
+      mv archive.zip LibXSLT-$version.zip
+
+  artifacts:
+      when: always
+      paths:
+          - LibXSLT-*.zip
+
+  tags:
+    - riscos
+
+
+#### Build with build service ####
+# (too slow to build right now)
+.robuild:
+  # Builds using the RISC OS Build service.
+  stage: build
+  script:
+    - |
+      set -o pipefail
+      # Zip up the source to send to robuild
+      zip -q9r /tmp/source-archive.zip * .robuild.yaml
+
+      # Fetch the build client
+      curl -s -L -o riscos-build-online https://github.com/gerph/robuild-client/releases/download/v0.05/riscos-build-online && chmod +x riscos-build-online
+
+      # Send the archive file to build service
+      # Note: This is being sent directly to the back end to avoid the gateway that times out at 10 minutes.
+      ./riscos-build-online -i /tmp/source-archive.zip -a off -s ws://backend0.build.riscos.online:13254/ -t 1800 -o /tmp/built
+
+    - |
+      version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
+      version=$version-$(git rev-parse --short HEAD)
+      echo "This is version: $version"
+      if [ -f /tmp/built,a91 ] ; then
+          cp /tmp/built,a91 "LibXSLT-$version.zip"
+      else
+          echo "No archive was built?"
+          exit 1
+      fi
+
+  artifacts:
+      when: always
+      paths:
+          - LibXSLT-*.zip
+
+  tags:
+    - linux
+
+
+#### Stages to execute ####
+stages:
+  - build
