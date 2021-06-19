@@ -6,6 +6,9 @@
  * daniel@veillard.com
  */
 
+/* Justin's port version */
+#define PORTVERSION "1.34"
+
 #include "libxslt/libxslt.h"
 #include "libexslt/exslt.h"
 #include <stdio.h>
@@ -116,6 +119,10 @@ static int nbpaths = 0;
 static char *output = NULL;
 static int errorno = 0;
 static const char *writesubtree = NULL;
+
+#ifdef __riscos
+#include "libxml/riscos.h"
+#endif
 
 /*
  * Entity loading control and customization.
@@ -490,9 +497,112 @@ xsltProcess(xmlDocPtr doc, xsltStylesheetPtr cur, const char *filename) {
     }
 }
 
+#ifdef __riscos
+#include <ctype.h>
+#include <stdarg.h>
+#include <limits.h>
+#include "throwback.h"
+
+int native=0;
+int throwback=0;
+
+static void
+xsltprocErrorFunc(void *ctx ATTRIBUTE_UNUSED, const char *msg, ...) {
+    va_list args;
+
+    static char bigbuffer[4096]="";
+    static char *start=NULL;
+    char *lineend;
+    char *linestart;
+    if (start==NULL)
+      start=bigbuffer;
+
+    va_start(args, msg);
+    vsprintf(start, msg, args);
+    va_end(args);
+    fprintf(stderr,"%s",start);
+
+    linestart=bigbuffer;
+
+    while ((lineend=strchr(linestart,'\n')) !=NULL)
+    {
+      char *line=linestart;
+      *lineend='\0';
+
+      while ((line=strstr(line,":"))!=NULL && !isdigit(line[1]))
+        line++;
+
+      if (line)
+      {
+        char *file=linestart;
+        *line='\0';
+        /* line+=7; */
+        line+=1;
+        if (strchr(file,' ')==NULL)
+        {
+          char *end;
+          int lineno=(int)strtoul(line,&end,10);
+          if (lineno!=ULONG_MAX && end[0]==':' && end[1]==' ')
+          {
+            char *error=&end[2];
+            seriousness_t serious=s_error;
+
+            /* Perform translation on filename */
+            file=riscosfilename(file);
+
+            /* printf("\n\n\nFILE: %s  LINE: %i\n",file,lineno); */
+            /* printf("ERROR: %s\n\n\n",error); */
+            if (strncmp(error,"error: ",strlen("error: "))==0)
+            {
+              error+=strlen("error: ");
+              serious=s_error;
+            }
+            else if (strncmp(error,"warning: ",strlen("warning: "))==0)
+            {
+              error+=strlen("warning: ");
+              serious=s_warning;
+            }
+            else if (strncmp(error,"validity error: ",strlen("validity error: "))==0)
+            {
+              error+=strlen("validity error: ");
+              serious=s_seriouserror;
+            }
+            else if (strncmp(error,"validity warning: ",strlen("validity warning: "))==0)
+            {
+              error+=strlen("validity warning: ");
+              serious=s_warning;
+            }
+
+            Throwback(serious,file,lineno,error);
+          }
+        }
+      }
+      linestart=&lineend[1];
+    }
+    if (linestart!=bigbuffer)
+      strcpy(bigbuffer,linestart);
+    start=bigbuffer+strlen(bigbuffer);
+}
+#endif
+
+
 static void usage(const char *name) {
+#ifdef __riscos
+    /* The formatting fits in with the RISC OS way of doing things -
+         Syntax: describes the syntax of the command
+         The variable switches are called switches, not options.
+         User replacable values are in <>s
+         Optionals are in []s
+       We'd also prefer that tabs weren't used, but that there were two
+       spaces instead, but that's large scale changes, so we won't bother
+       with it.
+     */
+    printf("Syntax: %s [<switches>] <stylesheet> <file> [<file> ...]\n", name);
+    printf("\nSwitches:\n");
+#else
     printf("Usage: %s [options] stylesheet file [file ...]\n", name);
     printf("   Options:\n");
+#endif
     printf("\t--version or -V: show the version of libxml and libxslt used\n");
     printf("\t--verbose or -v: show logs of what's happening\n");
     printf("\t--output file or -o file: save to a given file\n");
@@ -502,7 +612,7 @@ static void usage(const char *name) {
     printf("\t--debug: dump the tree of the result instead\n");
 #endif
     printf("\t--dumpextensions: dump the registered extension elements and functions to stdout\n");
-    printf("\t--novalid skip the Dtd loading phase\n");
+    printf("\t--novalid : skip the DTD loading phase\n");
     printf("\t--noout: do not dump the result\n");
     printf("\t--maxdepth val : increase the maximum depth\n");
 #if LIBXML_VERSION >= 20600
@@ -513,7 +623,7 @@ static void usage(const char *name) {
 #endif
     printf("\t--param name value : pass a (parameter,value) pair\n");
     printf("\t       value is an UTF8 XPath expression.\n");
-    printf("\t       string values must be quoted like \"'string'\"\n or");
+    printf("\t       string values must be quoted like \"'string'\"\n or\n");
     printf("\t       use stringparam to avoid it\n");
     printf("\t--stringparam name value : pass a (parameter, UTF8 string value) pair\n");
     printf("\t--path 'paths': provide a set of paths for resources\n");
@@ -522,7 +632,11 @@ static void usage(const char *name) {
     printf("\t--nomkdir : refuse to create directories\n");
     printf("\t--writesubtree path : allow file write only with the path subtree\n");
 #ifdef LIBXML_CATALOG_ENABLED
+#ifdef __riscos
+    printf("\t--catalogs : use the catalogs from SGML$CatalogFiles\n");
+#else
     printf("\t--catalogs : use SGML catalogs from $SGML_CATALOG_FILES\n");
+#endif
     printf("\t             otherwise XML Catalogs starting from \n");
     printf("\t         file:///etc/xml/catalog are activated by default\n");
 #endif
@@ -531,6 +645,10 @@ static void usage(const char *name) {
 #endif
     printf("\t--load-trace : print trace of all external entites loaded\n");
     printf("\t--profile or --norman : dump profiling informations \n");
+#ifdef __riscos
+    printf("\t--throwback : provide feedback to external tasks\n");
+    printf("\t--native : accept native filenames\n");
+#endif
     printf("\nProject libxslt home page: http://xmlsoft.org/XSLT/\n");
     printf("To report bugs and get help: http://xmlsoft.org/XSLT/bugs.html\n");
 }
@@ -568,6 +686,18 @@ main(int argc, char **argv)
             debug++;
         } else
 #endif
+#ifdef __riscos
+        if ((!strcmp(argv[i], "-T")) ||
+                (!strcmp(argv[i], "-throwback")) ||
+                (!strcmp(argv[i], "--throwback"))) {
+            throwback=1;
+        } else
+        if ((!strcmp(argv[i], "-N")) ||
+                (!strcmp(argv[i], "-native")) ||
+                (!strcmp(argv[i], "--native"))) {
+            native=1;
+        } else
+#endif
         if ((!strcmp(argv[i], "-v")) ||
                 (!strcmp(argv[i], "-verbose")) ||
                 (!strcmp(argv[i], "--verbose"))) {
@@ -593,6 +723,10 @@ main(int argc, char **argv)
                    xsltLibxsltVersion, xsltLibxmlVersion);
             printf("libexslt %d was compiled against libxml %d\n",
                    exsltLibexsltVersion, exsltLibxmlVersion);
+#ifdef __riscos
+            printf("RISC OS port "PORTVERSION" ("__DATE__ ") "
+                   "by Gerph\n");
+#endif
         } else if ((!strcmp(argv[i], "-repeat"))
                    || (!strcmp(argv[i], "--repeat"))) {
             if (repeat == 0)
@@ -649,10 +783,22 @@ main(int argc, char **argv)
                    (!strcmp(argv[i], "--catalogs"))) {
             const char *catalogs;
 
+#ifdef __riscos
+            catalogs = getenv("SGML$CatalogFiles");
+#else
             catalogs = getenv("SGML_CATALOG_FILES");
+#endif
             if (catalogs == NULL) {
+#ifdef __riscos
+                fprintf(stderr, "Variable SGML$CatalogFiles not set\n");
+#else
                 fprintf(stderr, "Variable $SGML_CATALOG_FILES not set\n");
+#endif
             } else {
+#ifdef __riscos
+                extern char *unixfilename(const char *filename);
+                catalogs = unixfilename(catalogs);
+#endif
                 xmlLoadCatalogs(catalogs);
             }
 #endif
@@ -756,6 +902,17 @@ main(int argc, char **argv)
     if (dumpextensions) 
 	xsltDebugDumpExtensions(NULL);
 
+#ifdef __riscos
+    /*
+     * Install our throwback handlers so that we can get better feedback
+     */
+    if (throwback)
+    {
+      xsltSetGenericErrorFunc(NULL, xsltprocErrorFunc);
+      xmlSetGenericErrorFunc(NULL, xsltprocErrorFunc);
+    }
+#endif
+
     for (i = 1; i < argc; i++) {
         if ((!strcmp(argv[i], "-maxdepth")) ||
             (!strcmp(argv[i], "--maxdepth"))) {
@@ -792,6 +949,17 @@ main(int argc, char **argv)
         }
         if ((argv[i][0] != '-') || (strcmp(argv[i], "-") == 0)) {
             if (timing)
+#ifdef __riscos
+            if (native)
+            {
+              argv[i] = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
+              if (argv[i] == NULL)
+              {
+                fprintf(stderr, "not enough memory for filename translation\n");
+                exit(1);
+              }
+            }
+#endif
                 startTimer();
 #if LIBXML_VERSION >= 20600
 	    style = xmlReadFile((const char *) argv[i], NULL, options);
@@ -805,6 +973,17 @@ main(int argc, char **argv)
 		cur = NULL;
 		errorno = 4;
 	    } else {
+#ifdef __riscos
+            if (native)
+            {
+              argv[i] = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
+              if (argv[i] == NULL)
+              {
+                fprintf(stderr, "not enough memory for filename translation\n");
+                exit(1);
+              }
+            }
+#endif
 		cur = xsltLoadStylesheetPI(style);
 		if (cur != NULL) {
 		    /* it is an embedded stylesheet */
@@ -876,7 +1055,7 @@ done:
     for (i = 0;i < nbstrparams;i++)
 	xmlFree(strparams[i]);
     if (output != NULL)
-	xmlFree(output);
+	xmlFree((xmlChar*)output);
     xsltFreeSecurityPrefs(sec);
     xsltCleanupGlobals();
     xmlCleanupParser();

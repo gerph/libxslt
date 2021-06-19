@@ -337,7 +337,14 @@ xsltCheckWrite(xsltSecurityPrefsPtr sec,
 		}
 		ret = xsltCheckWrite(sec, ctxt, (const xmlChar *)directory);
 		if (ret == 1)
+#ifdef __riscos
+		{
+		    char *newdirname = riscosfilename(directory);
+		    ret = mkdir(newdirname, 0755);
+		}
+#else
 		    ret = mkdir(directory, 0755);
+#endif
 		if (ret < 0)
 		    return(ret);
 	    }

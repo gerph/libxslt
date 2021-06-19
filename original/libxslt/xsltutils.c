@@ -51,6 +51,11 @@
 #define vsnprintf trio_vsnprintf
 #endif
 
+#ifdef __riscos
+#include <signal.h>
+#include "libxml/riscos.h"
+#endif
+
 /************************************************************************
  * 									*
  * 			Convenience function				*
@@ -824,6 +829,11 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
     if (results == NULL)
 	return;
 
+#ifdef __riscos
+  {
+    void (*signal_handler)(int) = signal(SIGFPE, SIG_IGN);
+#endif
+
     /* Shell's sort of node-set */
     for (incr = len / 2; incr > 0; incr /= 2) {
 	for (i = incr; i < len; i++) {
@@ -951,6 +961,11 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 	    }
 	}
     }
+
+#ifdef __riscos
+    signal(SIGFPE, signal_handler);
+  }
+#endif
 
     for (j = 0; j < nbsorts; j++) {
 	comp = sorts[j]->_private;
@@ -1234,6 +1249,19 @@ xsltSaveResultToFilename(const char *URL, xmlDocPtr result,
 	return(-1);
     xsltSaveResultTo(buf, result, style);
     ret = xmlOutputBufferClose(buf);
+#ifdef __riscos
+    /* Set the type of the file based on the method used to create it */
+    if (xmlStrEqual
+        (style->method, (const xmlChar *) "xhtml") ||
+        xmlStrEqual
+        (style->method, (const xmlChar *) "html") ) {
+        settype(riscosfilename(URL),0xfaf);
+    }
+    if (xmlStrEqual
+        (style->method, (const xmlChar *) "xml") ) {
+        settype(riscosfilename(URL),0xf80);
+    }
+#endif
     return(ret);
 }
 
@@ -1382,6 +1410,7 @@ xsltSaveResultToString(xmlChar **doc_txt_ptr, int * doc_txt_len,
 
 static long calibration = -1;
 
+#ifdef HAVE_GETTIMEOFDAY
 /**
  * xsltCalibrateTimestamps:
  *
@@ -1398,6 +1427,7 @@ xsltCalibrateTimestamps(void) {
 	xsltTimestamp();
     return(xsltTimestamp() / 1000);
 }
+#endif
 
 /**
  * xsltCalibrateAdjust:

@@ -199,7 +199,7 @@ xsltFunctionLocalTime(xmlXPathParserContextPtr ctxt, int nargs) {
     
     str = (char *) obj->stringval;
 
-    /* str = "$Date$" */
+    /* str = "$Date: 2002/10/15 16:06:47 $" */
     memset(digits, 0, sizeof(digits));
     strncpy(digits, str+7, 4);
     field = strtol(digits, NULL, 10);
@@ -240,11 +240,16 @@ xsltFunctionLocalTime(xmlXPathParserContextPtr ctxt, int nargs) {
      */
     local_tm = localtime(&gmt);
 
+#ifdef __riscos
+    /* localtime sets a global variable called timezone ? Not on RISC OS */
+    lmt = gmt; /* Not sure why they're doing this, so leave as is */
+#else
     /*
      * Calling localtime() has the side-effect of setting timezone.
      * After we know the timezone, we can adjust for it
      */
     lmt = gmt - timezone;
+#endif
 
     /*
      * FIXME: it's been too long since I did manual memory management.

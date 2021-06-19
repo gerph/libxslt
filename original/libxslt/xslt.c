@@ -62,6 +62,7 @@ double xmlXPathStringEvalNumber(const xmlChar *str);
  * Useful macros
  */
 
+#undef IS_BLANK
 #ifdef  IS_BLANK
 #undef	IS_BLANK
 #endif

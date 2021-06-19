@@ -10,6 +10,9 @@
 #define __XML_XSLT_SECURITY_H__
 
 #include <libxml/tree.h>
+#ifdef __riscos
+#include <libxml/riscos.h>
+#endif
 #include "xsltexports.h"
 #include "xsltInternals.h"
 

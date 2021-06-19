@@ -1126,6 +1126,22 @@ static xmlChar *
 exsltDateFormatDateTime (const exsltDateValDatePtr dt) {
     xmlChar buf[100], *cur = buf;
 
+#ifdef DEBUG_EXSLT_DATE
+    printf("validity:\n");
+    printf("  VALID_YEAR(yr)     = %i (%i)\n",VALID_YEAR(dt->year),dt->year);
+    printf("  VALID_MONTH(mon)   = %i (%i)\n",VALID_MONTH(dt->mon),dt->mon);
+    printf("  VALID_DAY(day)     = %i (%i)\n",VALID_DAY(dt->day),dt->day);
+    printf("  VALID_HOUR(hr)     = %i (%i)\n",VALID_HOUR(dt->hour),dt->hour);
+    printf("  VALID_MIN(min)     = %i (%i)\n",VALID_MIN(dt->min),dt->min);
+    printf("  VALID_SEC(sec)     = %i (%f)\n",VALID_SEC(dt->sec),dt->sec);
+    printf("  VALID_TZO(tzo)     = %i (%i)\n",VALID_TZO(dt->tzo),dt->tzo);
+    printf("  IS_LEAP(y)         = %i\n",IS_LEAP(dt->year));
+    printf("  VALID_MDAY(dt)     = %i\n",VALID_MDAY(dt));
+    printf("  VALID_DATE(dt)     = %i\n",VALID_DATE(dt));
+    printf("  VALID_TIME(dt)     = %i\n",VALID_TIME(dt));
+    printf("  VALID_DATETIME(dt) = %i\n",VALID_DATETIME(dt));
+#endif
+
     if ((dt == NULL) ||	!VALID_DATETIME(dt))
 	return NULL;
 
