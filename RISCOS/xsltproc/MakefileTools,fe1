@@ -17,9 +17,6 @@ COMPONENT  = XSLTProc
 # basic, for BASIC tools
 TYPE       = aif
 
-# The file to output (defaults ${COMPONENT})
-TARGET    ?= testReader
-
 # Comma-separated list of paths to use for includes, such as:
 #   <Lib$Dir>.LibName.
 INCLUDES   = include.

@@ -1,12 +1,22 @@
 # RISC OS CI build for libxslt.
 #
 
+# Enable submodules
+variables:
+  GIT_STRATEGY: clone
+  GIT_SUBMODULE_STRATEGY: recursive
+
 
 #### Builds ####
 cross-compile:
   # Builds using the cross-compiling toolchain
   stage: build
   script:
+
+    - |
+      cd libxml2/RISCOS
+      riscos-amu -f MakefileLib,fe1 export
+      cd ../..
 
     - |
       cd RISCOS/libxslt
@@ -19,12 +29,14 @@ cross-compile:
 
     - |
       mkdir -p Release/Tools
-      cp RISCOS/xsltproc/aif32/xsltproc,ff8 Release/Tools/xsltproc,ff8
+      cp RISCOS/xsltproc/aif32/XSLTProc,ff8 Release/Tools/XSLTProc,ff8
 
       mkdir -p Release/Libs
       cp -R $LIB_DIR/libxslt Release/Libs/libxslt
       cp -R $LIB_DIR/libexslt Release/Libs/libexslt
+      cd Release
       zip -9r ../archive.zip *
+      cd ..
 
     - |
       version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
