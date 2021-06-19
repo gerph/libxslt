@@ -7,7 +7,7 @@
  */
 
 /* Gerph's port version */
-#define PORTVERSION "1.36"
+#define PORTVERSION "1.37"
 
 #include "libxslt/libxslt.h"
 #include "libexslt/exslt.h"
