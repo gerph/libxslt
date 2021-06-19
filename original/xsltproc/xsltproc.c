@@ -7,7 +7,7 @@
  */
 
 /* Justin's port version */
-#define PORTVERSION "1.34"
+#define PORTVERSION "1.35"
 
 #include "libxslt/libxslt.h"
 #include "libexslt/exslt.h"
