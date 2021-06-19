@@ -43,6 +43,10 @@ const xmlChar *xsltDocFragFake = (const xmlChar *) " fake node libxslt";
 const xmlChar *xsltComputingGlobalVarMarker =
  (const xmlChar *) " var/param being computed";
 
+#define XSLT_VAR_GLOBAL 1<<0
+#define XSLT_VAR_IN_SELECT 1<<1
+#define XSLT_TCTXT_VARIABLE(c) ((xsltStackElemPtr) (c)->contextVariable)
+
 /************************************************************************
  *									*
  *  Result Value Tree (Result Tree Fragment) interfaces			*
@@ -75,7 +79,9 @@ xsltCreateRVT(xsltTransformContextPtr ctxt)
     if (ctxt->cache->RVT) {
 	container = ctxt->cache->RVT;
 	ctxt->cache->RVT = (xmlDocPtr) container->next;
+	/* clear the internal pointers */
 	container->next = NULL;
+	container->prev = NULL;
 	if (ctxt->cache->nbRVT > 0)
 	    ctxt->cache->nbRVT--;
 #ifdef XSLT_DEBUG_PROFILE_CACHE
@@ -223,7 +229,7 @@ xsltExtensionInstructionResultFinalize(xsltTransformContextPtr ctxt)
 /**
  * xsltExtensionInstructionResultRegister:
  * @ctxt: an XSLT transformation context
- * @nodeSet: a node set to be inspected for result tree fragments
+ * @obj: an XPath object to be inspected for result tree fragments
  *
  * Marks the result of a value-returning extension instruction
  * in order to avoid it being garbage collected before the

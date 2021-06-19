@@ -56,6 +56,10 @@ const int xsltLibxmlVersion = LIBXML_VERSION;
 
 const xmlChar *xsltConstNamespaceNameXSLT = (const xmlChar *) XSLT_NAMESPACE;
 
+#define XSLT_ELEMENT_CATEGORY_XSLT 0
+#define XSLT_ELEMENT_CATEGORY_EXTENSION 1
+#define XSLT_ELEMENT_CATEGORY_LRE 2
+
 /*
 * xsltLiteralResultMarker:
 * Marker for Literal result elements, in order to avoid multiple attempts
@@ -83,6 +87,9 @@ const xmlChar *xsltXSLTAttrMarker = (const xmlChar *) "LRE XSLT Attr";
 
 #endif
 
+#ifdef XSLT_LOCALE_WINAPI
+extern xmlRMutexPtr xsltLocaleMutex;
+#endif
 /*
  * Harmless but avoiding a problem when compiling against a
  * libxml <= 2.3.11 without LIBXML_DEBUG_ENABLED
@@ -141,11 +148,14 @@ xsltParseContentError(xsltStylesheetPtr style,
  *
  * Push an excluded namespace name on the stack
  *
- * Returns the new index in the stack or 0 in case of error
+ * Returns the new index in the stack or -1 if already present or
+ * in case of error
  */
 static int
 exclPrefixPush(xsltStylesheetPtr style, xmlChar * value)
 {
+    int i;
+
     if (style->exclPrefixMax == 0) {
         style->exclPrefixMax = 4;
         style->exclPrefixTab =
@@ -153,8 +163,13 @@ exclPrefixPush(xsltStylesheetPtr style, xmlChar * value)
                                    sizeof(style->exclPrefixTab[0]));
         if (style->exclPrefixTab == NULL) {
             xmlGenericError(xmlGenericErrorContext, "malloc failed !\n");
-            return (0);
+            return (-1);
         }
+    }
+    /* do not push duplicates */
+    for (i = 0;i < style->exclPrefixNr;i++) {
+        if (xmlStrEqual(style->exclPrefixTab[i], value))
+	    return(-1);
     }
     if (style->exclPrefixNr >= style->exclPrefixMax) {
         style->exclPrefixMax *= 2;
@@ -164,7 +179,7 @@ exclPrefixPush(xsltStylesheetPtr style, xmlChar * value)
                                     sizeof(style->exclPrefixTab[0]));
         if (style->exclPrefixTab == NULL) {
             xmlGenericError(xmlGenericErrorContext, "realloc failed !\n");
-            return (0);
+            return (-1);
         }
     }
     style->exclPrefixTab[style->exclPrefixNr] = value;
@@ -214,6 +229,9 @@ void
 xsltInit (void) {
     if (initialized == 0) {
 	initialized = 1;
+#ifdef XSLT_LOCALE_WINAPI
+	xsltLocaleMutex = xmlNewRMutex();
+#endif
         xsltRegisterAllExtras();
     }
 }
@@ -1704,12 +1722,13 @@ xsltParseStylesheetExcludePrefix(xsltStylesheetPtr style, xmlNodePtr cur,
 	                         prefix);
 		if (style != NULL) style->warnings++;
 	    } else {
+		if (exclPrefixPush(style, (xmlChar *) ns->href) >= 0) {
 #ifdef WITH_XSLT_DEBUG_PARSING
-		xsltGenericDebug(xsltGenericDebugContext,
-		    "exclude result prefix %s\n", prefix);
+		    xsltGenericDebug(xsltGenericDebugContext,
+			"exclude result prefix %s\n", prefix);
 #endif
-		exclPrefixPush(style, (xmlChar *) ns->href);
-		nb++;
+		    nb++;
+		}
 	    }
 	    xmlFree(prefix);
 	}
@@ -3397,7 +3416,7 @@ internal_err:
 static void
 xsltPrecomputeStylesheet(xsltStylesheetPtr style, xmlNodePtr cur)
 {
-    xmlNodePtr deleteNode;
+    xmlNodePtr deleteNode, styleelem;
     int internalize = 0;
 
     if ((style == NULL) || (cur == NULL))
@@ -3408,6 +3427,14 @@ xsltPrecomputeStylesheet(xsltStylesheetPtr style, xmlNodePtr cur)
 	internalize = 1;
     else
         style->internalized = 0;
+
+    if ((cur != NULL) && (IS_XSLT_ELEM(cur)) &&
+        (IS_XSLT_NAME(cur, "stylesheet"))) {
+	styleelem = cur;
+    } else {
+        styleelem = NULL;
+    }
+
     /*
      * This content comes from the stylesheet
      * For stylesheets, the set of whitespace-preserving
@@ -3539,9 +3566,16 @@ xsltPrecomputeStylesheet(xsltStylesheetPtr style, xmlNodePtr cur)
 	}
 
 	/*
-	 * Skip to next node
+	 * Skip to next node. In case of a namespaced element children of
+	 * the stylesheet and not in the XSLT namespace and not an extension
+	 * element, ignore its content.
 	 */
-	if (cur->children != NULL) {
+	if ((cur->type == XML_ELEMENT_NODE) && (cur->ns != NULL) &&
+	    (styleelem != NULL) && (cur->parent == styleelem) &&
+	    (!xmlStrEqual(cur->ns->href, XSLT_NAMESPACE)) &&
+	    (!xsltCheckExtURI(style, cur->ns->href))) {
+	    goto skip_children;
+	} else if (cur->children != NULL) {
 	    if ((cur->children->type != XML_ENTITY_DECL) &&
 		(cur->children->type != XML_ENTITY_REF_NODE) &&
 		(cur->children->type != XML_ENTITY_NODE)) {
@@ -3554,7 +3588,7 @@ skip_children:
 	if (cur->next != NULL) {
 	    cur = cur->next;
 	    continue;
-	}	
+	}
 	do {
 
 	    cur = cur->parent;
@@ -4906,13 +4940,14 @@ xsltParseTemplateContent(xsltStylesheetPtr style, xmlNodePtr templ) {
 	     * okay this is an extension element compile it too
 	     */
 	    xsltStylePreCompute(style, cur);
-	} else {
+	}
+	else if (cur->type == XML_ELEMENT_NODE)
+	{
 	    /*
 	     * This is an element which will be output as part of the
 	     * template exectution, precompile AVT if found.
 	     */
-	    if ((cur->ns == NULL) && (style->defaultAlias != NULL) &&
-	    		(cur->type == XML_ELEMENT_NODE)) {
+	    if ((cur->ns == NULL) && (style->defaultAlias != NULL)) {
 		cur->ns = xmlSearchNsByHref(cur->doc, cur,
 			style->defaultAlias);
 	    }
@@ -6023,11 +6058,10 @@ xsltParseStylesheetTop(xsltStylesheetPtr style, xmlNodePtr top) {
 	xmlFree(prop);
     }
 
-    cur = top->children;
-
     /*
      * process xsl:import elements
      */
+    cur = top->children;
     while (cur != NULL) {
 	    if (IS_BLANK_NODE(cur)) {
 		    cur = cur->next;
@@ -6219,6 +6253,15 @@ xsltParseSimplifiedStylesheetTree(xsltCompilerCtxtPtr cctxt,
 }
 
 #ifdef XSLT_REFACTORED_XSLT_NSCOMP
+/**
+ * xsltRestoreDocumentNamespaces:
+ * @ns: map of namespaces
+ * @doc: the document
+ *
+ * Restore the namespaces for the document
+ *
+ * Returns 0 in case of success, -1 in case of failure
+ */
 int
 xsltRestoreDocumentNamespaces(xsltNsMapPtr ns, xmlDocPtr doc)
 {
@@ -6260,6 +6303,7 @@ xsltParseStylesheetProcess(xsltStylesheetPtr style, xmlDocPtr doc)
     xmlNodePtr cur;
     int oldIsSimplifiedStylesheet;
 
+    xsltInitGlobals();
 
     if ((style == NULL) || (doc == NULL))
 	return(NULL);
@@ -6312,9 +6356,24 @@ xsltParseStylesheetProcess(xsltStylesheetPtr style, xmlDocPtr doc)
 
 #else /* XSLT_REFACTORED */
 
+/**
+ * xsltParseStylesheetProcess:
+ * @ret:  the XSLT stylesheet (the current stylesheet-level)
+ * @doc:  and xmlDoc parsed XML
+ *
+ * Parses an XSLT stylesheet, adding the associated structures.
+ * Called by:
+ *  xsltParseStylesheetImportedDoc() (xslt.c)
+ *  xsltParseStylesheetInclude() (imports.c)
+ *
+ * Returns the value of the @style parameter if everything
+ * went right, NULL if something went amiss.
+ */
 xsltStylesheetPtr
 xsltParseStylesheetProcess(xsltStylesheetPtr ret, xmlDocPtr doc) {
     xmlNodePtr cur;
+
+    xsltInitGlobals();
 
     if (doc == NULL)
 	return(NULL);
@@ -6409,7 +6468,7 @@ xsltParseStylesheetProcess(xsltStylesheetPtr ret, xmlDocPtr doc) {
 /**
  * xsltParseStylesheetImportedDoc:
  * @doc:  an xmlDoc parsed XML
- * @style: pointer to the parent stylesheet (if it exists)
+ * @parentStyle: pointer to the parent stylesheet (if it exists)
  *
  * parse an XSLT stylesheet building the associated structures
  * except the processing not needed for imported documents.
@@ -6565,7 +6624,11 @@ xsltParseStylesheetImportedDoc(xmlDocPtr doc,
     * Old behaviour.
     */
     retStyle->doc = doc;
-    xsltParseStylesheetProcess(retStyle, doc);
+    if (xsltParseStylesheetProcess(retStyle, doc) == NULL) {
+		retStyle->doc = NULL;
+		xsltFreeStylesheet(retStyle);
+		retStyle = NULL;
+    }
     if (retStyle != NULL) {
 	if (retStyle->errors != 0) {
 	    retStyle->doc = NULL;
@@ -6585,7 +6648,11 @@ xsltParseStylesheetImportedDoc(xmlDocPtr doc,
  * xsltParseStylesheetDoc:
  * @doc:  and xmlDoc parsed XML
  *
- * parse an XSLT stylesheet building the associated structures
+ * parse an XSLT stylesheet, building the associated structures.  doc
+ * is kept as a reference within the returned stylesheet, so changes
+ * to doc after the parsing will be reflected when the stylesheet
+ * is applied, and the doc is automatically freed when the
+ * stylesheet is closed.
  *
  * Returns a new XSLT stylesheet structure.
  */
@@ -6593,6 +6660,8 @@ xsltParseStylesheetImportedDoc(xmlDocPtr doc,
 xsltStylesheetPtr
 xsltParseStylesheetDoc(xmlDocPtr doc) {
     xsltStylesheetPtr ret;
+
+    xsltInitGlobals();
 
     ret = xsltParseStylesheetImportedDoc(doc, NULL);
     if (ret == NULL)
@@ -6628,6 +6697,7 @@ xsltParseStylesheetFile(const xmlChar* filename) {
     xsltStylesheetPtr ret;
     xmlDocPtr doc;
     
+    xsltInitGlobals();
 
     if (filename == NULL)
 	return(NULL);
@@ -6789,6 +6859,8 @@ xsltLoadStylesheetPI(xmlDocPtr doc) {
     xmlChar *href = NULL;
     xmlURIPtr URI;
 
+    xsltInitGlobals();
+
     if (doc == NULL)
 	return(NULL);
 
@@ -6840,8 +6912,14 @@ xsltLoadStylesheetPI(xmlDocPtr doc) {
 		    "xml-stylesheet : no ID %s found\n", URI->fragment);
 	    } else {
 		xmlDocPtr fake;
-		xmlNodePtr subtree;
+		xmlNodePtr subtree, newtree;
+		xmlNsPtr ns;
 
+#ifdef WITH_XSLT_DEBUG
+		xsltGenericDebug(xsltGenericDebugContext,
+		    "creating new document from %s for embedded stylesheet\n",
+		    doc->URL);
+#endif
 		/*
 		 * move the subtree in a new document passed to
 		 * the stylesheet analyzer
@@ -6849,20 +6927,38 @@ xsltLoadStylesheetPI(xmlDocPtr doc) {
 		subtree = ID->parent;
 		fake = xmlNewDoc(NULL);
 		if (fake != NULL) {
-                    /*
-		     * the dictionnary should be shared since nodes are
-		     * moved over.
-		     */
+		    /*
+		    * Should the dictionary still be shared even though
+		    * the nodes are being copied rather than moved?
+		    */
 		    fake->dict = doc->dict;
 		    xmlDictReference(doc->dict);
 #ifdef WITH_XSLT_DEBUG
 		    xsltGenericDebug(xsltGenericDebugContext,
-                         "reusing dictionary from %s for stylesheet\n",
-			 doc->URL);
+			"reusing dictionary from %s for embedded stylesheet\n",
+			doc->URL);
 #endif
 
-		    xmlUnlinkNode(subtree);
-		    xmlAddChild((xmlNodePtr) fake, subtree);
+		    newtree = xmlDocCopyNode(subtree, fake, 1);
+
+		    fake->URL = xmlNodeGetBase(doc, subtree->parent);
+#ifdef WITH_XSLT_DEBUG
+		    xsltGenericDebug(xsltGenericDebugContext,
+			"set base URI for embedded stylesheet as %s\n",
+			fake->URL);
+#endif
+
+		    /*
+		    * Add all namespaces in scope of embedded stylesheet to
+		    * root element of newly created stylesheet document
+		    */
+		    while ((subtree = subtree->parent) != (xmlNodePtr)doc) {
+			for (ns = subtree->ns; ns; ns = ns->next) {
+			    xmlNewNs(newtree,  ns->href, ns->prefix);
+			}
+		    }
+
+		    xmlAddChild((xmlNodePtr)fake, newtree);
 		    ret = xsltParseStylesheetDoc(fake);
 		    if (ret == NULL)
 			xmlFreeDoc(fake);

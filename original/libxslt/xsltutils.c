@@ -12,7 +12,12 @@
 #define IN_LIBXSLT
 #include "libxslt.h"
 
+#ifndef	XSLT_NEED_TRIO
 #include <stdio.h>
+#else
+#include <trio.h>
+#endif
+
 #include <string.h>
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -47,11 +52,6 @@
 #endif /* _MS_VER */
 #endif /* WIN32 */
 
-#ifdef XSLT_NEED_TRIO
-#include "trio.h"
-#define vsnprintf trio_vsnprintf
-#endif
-
 /************************************************************************
  * 									*
  * 			Convenience function				*
@@ -76,7 +76,7 @@
  * default declaration values unless DTD use has been turned off.
  *
  * Returns the attribute value or NULL if not found. The string is allocated
- *         in the stylesheet dictionnary.
+ *         in the stylesheet dictionary.
  */
 const xmlChar *
 xsltGetCNsProp(xsltStylesheetPtr style, xmlNodePtr node,
@@ -347,6 +347,7 @@ xsltPointerListAddSize(xsltPointerListPtr list,
 
 /**
  * xsltPointerListCreate:
+ * @initialSize: the initial size for the list
  *
  * Creates an xsltPointerList structure.
  *
@@ -373,6 +374,7 @@ xsltPointerListCreate(int initialSize)
 
 /**
  * xsltPointerListFree:
+ * @list: pointer to the list to be freed
  *
  * Frees the xsltPointerList structure. This does not free
  * the content of the list.
@@ -388,7 +390,8 @@ xsltPointerListFree(xsltPointerListPtr list)
 }
 
 /**
- * xsltPointerListFree:
+ * xsltPointerListClear:
+ * @list: pointer to the list to be cleared
  *
  * Resets the list, but does not free the allocated array
  * and does not free the content of the list.
@@ -422,11 +425,18 @@ xsltPointerListClear(xsltPointerListPtr list)
  */
 void
 xsltMessage(xsltTransformContextPtr ctxt, xmlNodePtr node, xmlNodePtr inst) {
+    xmlGenericErrorFunc error = xsltGenericError;
+    void *errctx = xsltGenericErrorContext;
     xmlChar *prop, *message;
     int terminate = 0;
 
     if ((ctxt == NULL) || (inst == NULL))
 	return;
+
+    if (ctxt->error != NULL) {
+	error = ctxt->error;
+	errctx = ctxt->errctx;
+    }
 
     prop = xmlGetNsProp(inst, (const xmlChar *)"terminate", NULL);
     if (prop != NULL) {
@@ -435,7 +445,7 @@ xsltMessage(xsltTransformContextPtr ctxt, xmlNodePtr node, xmlNodePtr inst) {
 	} else if (xmlStrEqual(prop, (const xmlChar *)"no")) {
 	    terminate = 0;
 	} else {
-	    xsltGenericError(xsltGenericErrorContext,
+	    error(errctx,
 		"xsl:message : terminate expecting 'yes' or 'no'\n");
 	    ctxt->state = XSLT_STATE_ERROR;
 	}
@@ -445,10 +455,9 @@ xsltMessage(xsltTransformContextPtr ctxt, xmlNodePtr node, xmlNodePtr inst) {
     if (message != NULL) {
 	int len = xmlStrlen(message);
 
-	xsltGenericError(xsltGenericErrorContext, "%s",
-		         (const char *)message);
+	error(errctx, "%s", (const char *)message);
 	if ((len > 0) && (message[len - 1] != '\n'))
-	    xsltGenericError(xsltGenericErrorContext, "\n");
+	    error(errctx, "\n");
 	xmlFree(message);
     }
     if (terminate)
@@ -473,7 +482,7 @@ xsltMessage(xsltTransformContextPtr ctxt, xmlNodePtr node, xmlNodePtr inst) {
 								\
     size = 150;							\
 								\
-    while (1) {							\
+    while (size < 64000) {					\
 	va_start(ap, msg);					\
   	chars = vsnprintf(str, size, msg, ap);			\
 	va_end(ap);						\
@@ -717,11 +726,11 @@ xsltTransformError(xsltTransformContextPtr ctxt,
 
 /**
  * xsltSplitQName:
- * @dict: a dictionnary
+ * @dict: a dictionary
  * @name:  the full QName
  * @prefix: the return value
  *
- * Split QNames into prefix and local names, both allocated from a dictionnary.
+ * Split QNames into prefix and local names, both allocated from a dictionary.
  *
  * Returns: the localname or NULL in case of error.
  */
@@ -1030,6 +1039,12 @@ xsltComputeSortResult(xsltTransformContextPtr ctxt, xmlNodePtr sort) {
 		}
 	    } else {
 		if (res->type == XPATH_STRING) {
+		    if (comp->locale != (xsltLocale)0) {
+			xmlChar *str = res->stringval;
+			res->stringval = (xmlChar *) xsltStrxfrm(comp->locale, str);
+			xmlFree(str);
+		    }
+
 		    results[i] = res;
 		} else {
 #ifdef WITH_XSLT_DEBUG_PROCESS
@@ -1182,6 +1197,11 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 				results[j + incr]->floatval)
 			    tst = 1;
 			else tst = -1;
+		    } else if(comp->locale != (xsltLocale)0) {
+			tst = xsltLocaleStrcmp(
+			    comp->locale,
+			    (xsltLocaleChar *) results[j]->stringval,
+			    (xsltLocaleChar *) results[j + incr]->stringval); 
 		    } else {
 			tst = xmlStrcmp(results[j]->stringval,
 				     results[j + incr]->stringval); 
@@ -1236,6 +1256,11 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 					res[j + incr]->floatval)
 				    tst = 1;
 				else tst = -1;
+			    } else if(comp->locale != (xsltLocale)0) {
+				tst = xsltLocaleStrcmp(
+				    comp->locale,
+				    (xsltLocaleChar *) res[j]->stringval,
+				    (xsltLocaleChar *) res[j + incr]->stringval); 
 			    } else {
 				tst = xmlStrcmp(res[j]->stringval,
 					     res[j + incr]->stringval); 
@@ -2095,13 +2120,17 @@ xsltXPathCompile(xsltStylesheetPtr style, const xmlChar *str) {
 	    xpathCtxt = XSLT_CCTXT(style)->xpathCtxt;
 	    xpathCtxt->doc = style->doc;
 	} else
-	    xpathCtxt = xmlXPathNewContext(style->doc);	
+	    xpathCtxt = xmlXPathNewContext(style->doc);
 #else
 	xpathCtxt = xmlXPathNewContext(style->doc);
 #endif
+	if (xpathCtxt == NULL)
+	    return NULL;
 	xpathCtxt->dict = style->dict;
     } else {
 	xpathCtxt = xmlXPathNewContext(NULL);
+	if (xpathCtxt == NULL)
+	    return NULL;
     }
     /*
     * Compile the expression.
