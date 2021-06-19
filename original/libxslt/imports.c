@@ -41,6 +41,7 @@
 #include "xslt.h"
 #include "xsltInternals.h"
 #include "xsltutils.h"
+#include "preproc.h"
 #include "imports.h"
 #include "documents.h"
 #include "security.h"
@@ -52,6 +53,25 @@
  *			Module interfaces				*
  *									*
  ************************************************************************/
+/**
+ * xsltFixImportedCompSteps:
+ * @master: the "master" stylesheet
+ * @style: the stylesheet being imported by the master
+ *
+ * normalize the comp steps for the stylesheet being imported
+ * by the master, together with any imports within that. 
+ *
+ */
+static void xsltFixImportedCompSteps(xsltStylesheetPtr master, 
+			xsltStylesheetPtr style) {
+    xsltStylesheetPtr res;
+    xmlHashScan(style->templatesHash,
+	            (xmlHashScanner) xsltNormalizeCompSteps, master);
+    master->extrasNr += style->extrasNr;
+    for (res = style->imports; res != NULL; res = res->next) {
+        xsltFixImportedCompSteps(master, res);
+    }
+}
 
 /**
  * xsltParseStylesheetImport:
@@ -76,7 +96,7 @@ xsltParseStylesheetImport(xsltStylesheetPtr style, xmlNodePtr cur) {
     if ((cur == NULL) || (style == NULL))
 	return (ret);
 
-    uriRef = xsltGetNsProp(cur, (const xmlChar *)"href", XSLT_NAMESPACE);
+    uriRef = xmlGetNsProp(cur, (const xmlChar *)"href", NULL);
     if (uriRef == NULL) {
 	xsltTransformError(NULL, style, cur,
 	    "xsl:import : missing href attribute\n");
@@ -119,11 +139,8 @@ xsltParseStylesheetImport(xsltStylesheetPtr style, xmlNodePtr cur) {
 	}
     }
 
-#ifdef XSLT_PARSE_OPTIONS
-    import = xmlReadFile((const char *) URI, NULL, XSLT_PARSE_OPTIONS);
-#else
-    import = xmlParseFile((const char *) URI);
-#endif
+    import = xsltDocDefaultLoader(URI, style->dict, XSLT_PARSE_OPTIONS,
+                                  (void *) style, XSLT_LOAD_STYLESHEET);
     if (import == NULL) {
 	xsltTransformError(NULL, style, cur,
 	    "xsl:import : unable to load %s\n", URI);
@@ -134,9 +151,9 @@ xsltParseStylesheetImport(xsltStylesheetPtr style, xmlNodePtr cur) {
     if (res != NULL) {
 	res->next = style->imports;
 	style->imports = res;
-	xmlHashScan(res->templatesHash, 
-	            (xmlHashScanner) xsltNormalizeCompSteps, style);
-	style->extrasNr += res->extrasNr;
+	if (style->parent == NULL) {
+	    xsltFixImportedCompSteps(style, res);
+	}
 	ret = 0;
     } else {
 	xmlFreeDoc(import);
@@ -170,13 +187,15 @@ xsltParseStylesheetInclude(xsltStylesheetPtr style, xmlNodePtr cur) {
     xmlChar *base = NULL;
     xmlChar *uriRef = NULL;
     xmlChar *URI = NULL;
+    xsltStylesheetPtr result;
     xsltDocumentPtr include;
     xsltDocumentPtr docptr;
+    int oldNopreproc;
 
     if ((cur == NULL) || (style == NULL))
 	return (ret);
 
-    uriRef = xsltGetNsProp(cur, (const xmlChar *)"href", XSLT_NAMESPACE);
+    uriRef = xmlGetNsProp(cur, (const xmlChar *)"href", NULL);
     if (uriRef == NULL) {
 	xsltTransformError(NULL, style, cur,
 	    "xsl:include : missing href attribute\n");
@@ -211,19 +230,38 @@ xsltParseStylesheetInclude(xsltStylesheetPtr style, xmlNodePtr cur) {
 	    "xsl:include : unable to load %s\n", URI);
 	goto error;
     }
-
+#ifdef XSLT_REFACTORED    
+    if (IS_XSLT_ELEM_FAST(cur) && (cur->psvi != NULL)) {
+	((xsltStyleItemIncludePtr) cur->psvi)->include = include;
+    } else {
+	xsltTransformError(NULL, style, cur,
+	    "Internal error: (xsltParseStylesheetInclude) "
+	    "The xsl:include element was not compiled.\n", URI);
+	style->errors++;
+    }
+#endif
     oldDoc = style->doc;
     style->doc = include->doc;
     /* chain to stylesheet for recursion checking */
     include->includes = style->includes;
     style->includes = include;
-    ret = (int)xsltParseStylesheetProcess(style, include->doc);
+    oldNopreproc = style->nopreproc;
+    style->nopreproc = include->preproc;
+    /*
+    * TODO: This will change some values of the
+    *  including stylesheet with every included module
+    *  (e.g. excluded-result-prefixes)
+    *  We need to strictly seperate such stylesheet-owned values.
+    */
+    result = xsltParseStylesheetProcess(style, include->doc);
+    style->nopreproc = oldNopreproc;
+    include->preproc = 1;
     style->includes = include->includes;
     style->doc = oldDoc;
-    if (ret == 0) {
-		ret = -1;
-		goto error;
-	}
+    if (result == NULL) {
+	ret = -1;
+	goto error;
+    }
     ret = 0;
 
 error:
@@ -256,7 +294,7 @@ xsltNextImport(xsltStylesheetPtr cur) {
 	return(cur->next) ;
     do {
 	cur = cur->parent;
-	if (cur == NULL) return(NULL);
+	if (cur == NULL) break;
 	if (cur->next != NULL) return(cur->next);
     } while (cur != NULL);
     return(cur);
@@ -337,6 +375,13 @@ xsltFindElemSpaceHandling(xsltTransformContextPtr ctxt, xmlNodePtr node) {
  * @nameURI: the template name URI
  *
  * Finds the named template, apply import precedence rule.
+ * REVISIT TODO: We'll change the nameURI fields of
+ *  templates to be in the string dict, so if the
+ *  specified @nameURI is in the same dict, then use pointer
+ *  comparison. Check if this can be done in a sane way.
+ *  Maybe this function is not needed internally at
+ *  transformation-time if we hard-wire the called templates
+ *  to the caller.
  *
  * Returns the xsltTemplatePtr or NULL if not found
  */

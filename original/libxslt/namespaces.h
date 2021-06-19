@@ -18,11 +18,27 @@
 extern "C" {
 #endif
 
+/*
+ * Used within nsAliases hashtable when the default namespace is required
+ * but it's not been explicitly defined
+ */
+/**
+ * UNDEFINED_DEFAULT_NS:
+ *
+ * Special value for undefined namespace, internal
+ */
+#define	UNDEFINED_DEFAULT_NS	(const xmlChar *) -1L
+
 XSLTPUBFUN void XSLTCALL
 		xsltNamespaceAlias	(xsltStylesheetPtr style,
 					 xmlNodePtr node);
 XSLTPUBFUN xmlNsPtr XSLTCALL	
 		xsltGetNamespace	(xsltTransformContextPtr ctxt,
+					 xmlNodePtr cur,
+					 xmlNsPtr ns,
+					 xmlNodePtr out);
+XSLTPUBFUN xmlNsPtr XSLTCALL	
+		xsltGetPlainNamespace	(xsltTransformContextPtr ctxt,
 					 xmlNodePtr cur,
 					 xmlNsPtr ns,
 					 xmlNodePtr out);
@@ -34,8 +50,8 @@ XSLTPUBFUN xmlNsPtr XSLTCALL
 					 xmlNodePtr out);
 XSLTPUBFUN xmlNsPtr XSLTCALL	
 		xsltCopyNamespace	(xsltTransformContextPtr ctxt,
-					 xmlNodePtr node,
-					 xmlNsPtr cur);
+					 xmlNodePtr elem,
+					 xmlNsPtr ns);
 XSLTPUBFUN xmlNsPtr XSLTCALL	
 		xsltCopyNamespaceList	(xsltTransformContextPtr ctxt,
 					 xmlNodePtr node,

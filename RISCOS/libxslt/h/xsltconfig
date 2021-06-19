@@ -18,21 +18,28 @@ extern "C" {
  *
  * the version string like "1.2.3"
  */
-#define LIBXSLT_DOTTED_VERSION "1.1.0"
+#define LIBXSLT_DOTTED_VERSION "1.1.18"
 
 /**
  * LIBXSLT_VERSION:
  *
  * the version number: 1.2.3 value is 1002003
  */
-#define LIBXSLT_VERSION 10100
+#define LIBXSLT_VERSION 10118
 
 /**
  * LIBXSLT_VERSION_STRING:
  *
  * the version number string, 1.2.3 value is "1002003"
  */
-#define LIBXSLT_VERSION_STRING "10100"
+#define LIBXSLT_VERSION_STRING "10118"
+
+/**
+ * LIBXSLT_VERSION_EXTRA:
+ *
+ * extra version information, used to show a CVS compilation
+ */
+#define	LIBXSLT_VERSION_EXTRA ""
 
 /**
  * WITH_XSLT_DEBUG:
@@ -77,6 +84,8 @@ extern "C" {
 #define XSLT_NEED_TRIO
 #endif
 #ifdef __VMS
+#define HAVE_MATH_H 1
+#define HAVE_SYS_STAT_H 1
 #ifndef XSLT_NEED_TRIO
 #define XSLT_NEED_TRIO
 #endif
@@ -96,6 +105,19 @@ extern "C" {
 #endif
 
 /**
+ * WITH_MODULES:
+ *
+ * Whether module support is configured into libxslt
+ * Note: no default module path for win32 platforms
+ */
+#if 0
+#ifndef WITH_MODULES
+#define WITH_MODULES
+#endif
+#define LIBXSLT_DEFAULT_PLUGINS_PATH() "@LIBXSLT_DEFAULT_PLUGINS_PATH@"
+#endif
+
+/**
  * ATTRIBUTE_UNUSED:
  *
  * This macro is used to flag unused function parameters to GCC
@@ -105,7 +127,7 @@ extern "C" {
 #include <ansidecl.h>
 #endif
 #ifndef ATTRIBUTE_UNUSED
-#define ATTRIBUTE_UNUSED
+#define ATTRIBUTE_UNUSED __attribute__((unused))
 #endif
 #else
 #define ATTRIBUTE_UNUSED

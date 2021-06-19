@@ -13,6 +13,7 @@
 #include "libxslt.h"
 
 #include <stdio.h>
+#include <string.h>
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -63,6 +64,92 @@
  ************************************************************************/
 
 /**
+ * xsltGetCNsProp:
+ * @style: the stylesheet
+ * @node:  the node
+ * @name:  the attribute name
+ * @nameSpace:  the URI of the namespace
+ *
+ * Similar to xmlGetNsProp() but with a slightly different semantic
+ *
+ * Search and get the value of an attribute associated to a node
+ * This attribute has to be anchored in the namespace specified,
+ * or has no namespace and the element is in that namespace.
+ *
+ * This does the entity substitution.
+ * This function looks in DTD attribute declaration for #FIXED or
+ * default declaration values unless DTD use has been turned off.
+ *
+ * Returns the attribute value or NULL if not found. The string is allocated
+ *         in the stylesheet dictionnary.
+ */
+const xmlChar *
+xsltGetCNsProp(xsltStylesheetPtr style, xmlNodePtr node,
+              const xmlChar *name, const xmlChar *nameSpace) {
+    xmlAttrPtr prop;
+    xmlDocPtr doc;
+    xmlNsPtr ns;
+    xmlChar *tmp;
+    const xmlChar *ret;
+
+    if ((node == NULL) || (style == NULL) || (style->dict == NULL))
+	return(NULL);
+
+    prop = node->properties;
+    if (nameSpace == NULL) {
+        return xmlGetProp(node, name);
+    }
+    while (prop != NULL) {
+	/*
+	 * One need to have
+	 *   - same attribute names
+	 *   - and the attribute carrying that namespace
+	 */
+        if ((xmlStrEqual(prop->name, name)) &&
+	    (((prop->ns == NULL) && (node->ns != NULL) &&
+	      (xmlStrEqual(node->ns->href, nameSpace))) ||
+	     ((prop->ns != NULL) &&
+	      (xmlStrEqual(prop->ns->href, nameSpace))))) {
+
+	    tmp = xmlNodeListGetString(node->doc, prop->children, 1);
+	    if (tmp == NULL)
+	        ret = xmlDictLookup(style->dict, BAD_CAST "", 0);
+	    else {
+	        ret = xmlDictLookup(style->dict, tmp, -1);
+		xmlFree(tmp);
+	    }
+	    return ret;
+        }
+	prop = prop->next;
+    }
+    tmp = NULL;
+    /*
+     * Check if there is a default declaration in the internal
+     * or external subsets
+     */
+    doc =  node->doc;
+    if (doc != NULL) {
+        if (doc->intSubset != NULL) {
+	    xmlAttributePtr attrDecl;
+
+	    attrDecl = xmlGetDtdAttrDesc(doc->intSubset, node->name, name);
+	    if ((attrDecl == NULL) && (doc->extSubset != NULL))
+		attrDecl = xmlGetDtdAttrDesc(doc->extSubset, node->name, name);
+		
+	    if ((attrDecl != NULL) && (attrDecl->prefix != NULL)) {
+	        /*
+		 * The DTD declaration only allows a prefix search
+		 */
+		ns = xmlSearchNs(doc, node, attrDecl->prefix);
+		if ((ns != NULL) && (xmlStrEqual(ns->href, nameSpace)))
+		    return(xmlDictLookup(style->dict,
+		                         attrDecl->defaultValue, -1));
+	    }
+	}
+    }
+    return(NULL);
+}
+/**
  * xsltGetNsProp:
  * @node:  the node
  * @name:  the attribute name
@@ -91,6 +178,15 @@ xsltGetNsProp(xmlNodePtr node, const xmlChar *name, const xmlChar *nameSpace) {
 	return(NULL);
 
     prop = node->properties;
+    /*
+    * TODO: Substitute xmlGetProp() for xmlGetNsProp(), since the former
+    * is not namespace-aware and will return an attribute with equal
+    * name regardless of its namespace.
+    * Example:
+    *   <xsl:element foo:name="myName"/>
+    *   So this would return "myName" even if an attribute @name
+    *   in the XSLT was requested.
+    */
     if (nameSpace == NULL)
 	return(xmlGetProp(node, name));
     while (prop != NULL) {
@@ -204,10 +300,116 @@ xsltGetUTF8Char(const unsigned char *utf, int *len) {
     return(c);
 
 error:
-    *len = 0;
+    if (len != NULL)
+	*len = 0;
     return(-1);
 }
 
+#ifdef XSLT_REFACTORED
+
+/**
+ * xsltPointerListAddSize:
+ * @list: the pointer list structure
+ * @item: the item to be stored
+ * @initialSize: the initial size of the list
+ *
+ * Adds an item to the list.
+ *
+ * Returns the position of the added item in the list or
+ *         -1 in case of an error.
+ */
+int
+xsltPointerListAddSize(xsltPointerListPtr list,		       
+		       void *item,
+		       int initialSize)
+{
+    if (list->items == NULL) {
+	if (initialSize <= 0)
+	    initialSize = 1;
+	list->items = (void **) xmlMalloc(
+	    initialSize * sizeof(void *));
+	if (list->items == NULL) {
+	    xsltGenericError(xsltGenericErrorContext,
+	     "xsltPointerListAddSize: memory allocation failure.\n");
+	    return(-1);
+	}
+	list->number = 0;
+	list->size = initialSize;
+    } else if (list->size <= list->number) {
+	list->size *= 2;
+	list->items = (void **) xmlRealloc(list->items,
+	    list->size * sizeof(void *));
+	if (list->items == NULL) {
+	    xsltGenericError(xsltGenericErrorContext,
+	     "xsltPointerListAddSize: memory re-allocation failure.\n");
+	    list->size = 0;
+	    return(-1);
+	}
+    }
+    list->items[list->number++] = item;
+    return(0);
+}
+
+/**
+ * xsltPointerListCreate:
+ *
+ * Creates an xsltPointerList structure.
+ *
+ * Returns a xsltPointerList structure or NULL in case of an error.
+ */
+xsltPointerListPtr
+xsltPointerListCreate(int initialSize)
+{
+    xsltPointerListPtr ret;
+
+    ret = xmlMalloc(sizeof(xsltPointerList));
+    if (ret == NULL) {
+	xsltGenericError(xsltGenericErrorContext,
+	     "xsltPointerListCreate: memory allocation failure.\n");
+	return (NULL);
+    }
+    memset(ret, 0, sizeof(xsltPointerList));
+    if (initialSize > 0) {
+	xsltPointerListAddSize(ret, NULL, initialSize);
+	ret->number = 0;
+    }
+    return (ret);
+}
+
+/**
+ * xsltPointerListFree:
+ *
+ * Frees the xsltPointerList structure. This does not free
+ * the content of the list.
+ */
+void
+xsltPointerListFree(xsltPointerListPtr list)
+{
+    if (list == NULL)
+	return;
+    if (list->items != NULL)
+	xmlFree(list->items);
+    xmlFree(list);
+}
+
+/**
+ * xsltPointerListFree:
+ *
+ * Resets the list, but does not free the allocated array
+ * and does not free the content of the list.
+ */
+void
+xsltPointerListClear(xsltPointerListPtr list)
+{
+    if (list->items != NULL) {
+	xmlFree(list->items);
+	list->items = NULL;
+    }
+    list->number = 0;
+    list->size = 0;
+}
+
+#endif /* XSLT_REFACTORED */
 
 /************************************************************************
  * 									*
@@ -231,7 +433,7 @@ xsltMessage(xsltTransformContextPtr ctxt, xmlNodePtr node, xmlNodePtr inst) {
     if ((ctxt == NULL) || (inst == NULL))
 	return;
 
-    prop = xsltGetNsProp(inst, (const xmlChar *)"terminate", XSLT_NAMESPACE);
+    prop = xmlGetNsProp(inst, (const xmlChar *)"terminate", NULL);
     if (prop != NULL) {
 	if (xmlStrEqual(prop, (const xmlChar *)"yes")) {
 	    terminate = 1;
@@ -430,8 +632,16 @@ xsltPrintErrorContext(xsltTransformContextPtr ctxt,
     
     if (ctxt != NULL)
 	type = "runtime error";
-    else if (style != NULL)
+    else if (style != NULL) {
+#ifdef XSLT_REFACTORED
+	if (XSLT_CCTXT(style)->errSeverity == XSLT_ERROR_SEVERITY_WARNING)
+	    type = "compilation warning";
+	else
+	    type = "compilation error";
+#else
 	type = "compilation error";
+#endif
+    }
 
     if ((file != NULL) && (line != 0) && (name != NULL))
 	error(errctx, "%s: file %s line %d element %s\n",
@@ -511,6 +721,32 @@ xsltTransformError(xsltTransformContextPtr ctxt,
  ************************************************************************/
 
 /**
+ * xsltSplitQName:
+ * @dict: a dictionnary
+ * @name:  the full QName
+ * @prefix: the return value
+ *
+ * Split QNames into prefix and local names, both allocated from a dictionnary.
+ *
+ * Returns: the localname or NULL in case of error.
+ */
+const xmlChar *
+xsltSplitQName(xmlDictPtr dict, const xmlChar *name, const xmlChar **prefix) {
+    int len = 0;
+    const xmlChar *ret = NULL;
+
+    *prefix = NULL;
+    if ((name == NULL) || (dict == NULL)) return(NULL);
+    if (name[0] == ':')
+        return(xmlDictLookup(dict, name, -1));
+    while ((name[len] != 0) && (name[len] != ':')) len++;
+    if (name[len] == 0) return(xmlDictLookup(dict, name, -1));
+    *prefix = xmlDictLookup(dict, name, len);
+    ret = xmlDictLookup(dict, &name[len + 1], -1);
+    return(ret);
+}
+
+/**
  * xsltGetQNameURI:
  * @node:  the node holding the QName
  * @name:  pointer to the initial QName value
@@ -579,7 +815,7 @@ xsltGetQNameURI(xmlNodePtr node, xmlChar ** name)
     if (ns == NULL) {
 	xsltGenericError(xsltGenericErrorContext,
 		"%s:%s : no namespace bound to prefix %s\n",
-		         qname, &qname[len + 1]);
+		         qname, &qname[len + 1], qname);
 	*name = NULL;
 	xmlFree(qname);
 	return(NULL);
@@ -589,6 +825,81 @@ xsltGetQNameURI(xmlNodePtr node, xmlChar ** name)
     return(ns->href);
 }
 
+/**
+ * xsltGetQNameURI2:
+ * @style:  stylesheet pointer
+ * @node:   the node holding the QName
+ * @name:   pointer to the initial QName value
+ *
+ * This function is similar to xsltGetQNameURI, but is used when
+ * @name is a dictionary entry.
+ *
+ * Returns the namespace URI if there is a prefix, or NULL if @name is
+ * not prefixed.
+ */
+const xmlChar *
+xsltGetQNameURI2(xsltStylesheetPtr style, xmlNodePtr node,
+		 const xmlChar **name) {
+    int len = 0;
+    xmlChar *qname;
+    xmlNsPtr ns;
+
+    if (name == NULL)
+        return(NULL);
+    qname = (xmlChar *)*name;
+    if ((qname == NULL) || (*qname == 0))
+        return(NULL);
+    if (node == NULL) {
+        xsltGenericError(xsltGenericErrorContext,
+                         "QName: no element for namespace lookup %s\n",
+                          qname);
+	*name = NULL;
+	return(NULL);
+    }
+
+    /*
+     * we are not trying to validate but just to cut, and yes it will
+     * work even if this is a set of UTF-8 encoded chars
+     */
+    while ((qname[len] != 0) && (qname[len] != ':'))
+        len++;
+
+    if (qname[len] == 0)
+        return(NULL);
+
+    /*
+     * handle xml: separately, this one is magical
+     */
+    if ((qname[0] == 'x') && (qname[1] == 'm') &&
+        (qname[2] == 'l') && (qname[3] == ':')) {
+        if (qname[4] == 0)
+            return(NULL);
+        *name = xmlDictLookup(style->dict, &qname[4], -1);
+        return(XML_XML_NAMESPACE);
+    }
+
+    qname = xmlStrndup(*name, len);
+    ns = xmlSearchNs(node->doc, node, qname);
+    if (ns == NULL) {
+	if (style) {
+	    xsltTransformError(NULL, style, node,
+		"No namespace bound to prefix '%s'.\n",
+		qname);
+	    style->errors++;
+	} else {
+	    xsltGenericError(xsltGenericErrorContext,
+                "%s : no namespace bound to prefix %s\n",
+		*name, qname);
+	}
+        *name = NULL;
+        xmlFree(qname);
+        return(NULL);
+    }
+    *name = xmlDictLookup(style->dict, (*name)+len+1, -1);
+    xmlFree(qname);
+    return(ns->href);
+}
+										      
 /************************************************************************
  * 									*
  * 				Sorting					*
@@ -600,6 +911,7 @@ xsltGetQNameURI(xmlNodePtr node, xmlChar ** name)
  * @list:  the node set
  *
  * reorder the current node list @list accordingly to the document order
+ * This function is slow, obsolete and should not be used anymore.
  */
 void
 xsltDocumentSortFunction(xmlNodeSetPtr list) {
@@ -637,19 +949,23 @@ xsltDocumentSortFunction(xmlNodeSetPtr list) {
  */
 xmlXPathObjectPtr *
 xsltComputeSortResult(xsltTransformContextPtr ctxt, xmlNodePtr sort) {
+#ifdef XSLT_REFACTORED
+    xsltStyleItemSortPtr comp;
+#else
+    xsltStylePreCompPtr comp;
+#endif
     xmlXPathObjectPtr *results = NULL;
     xmlNodeSetPtr list = NULL;
     xmlXPathObjectPtr res;
     int len = 0;
-    int i;
-    xsltStylePreCompPtr comp;
+    int i;    
     xmlNodePtr oldNode;
     xmlNodePtr oldInst;
     int	oldPos, oldSize ;
     int oldNsNr;
     xmlNsPtr *oldNamespaces;
 
-    comp = sort->_private;
+    comp = sort->psvi;
     if (comp == NULL) {
 	xsltGenericError(xsltGenericErrorContext,
 	     "xsl:sort : compilation failed\n");
@@ -688,8 +1004,18 @@ xsltComputeSortResult(xsltTransformContextPtr ctxt, xmlNodePtr sort) {
 	ctxt->xpathCtxt->proximityPosition = i + 1;
 	ctxt->node = list->nodeTab[i];
 	ctxt->xpathCtxt->node = ctxt->node;
+#ifdef XSLT_REFACTORED
+	if (comp->inScopeNs != NULL) {
+	    ctxt->xpathCtxt->namespaces = comp->inScopeNs->list;
+	    ctxt->xpathCtxt->nsNr = comp->inScopeNs->xpathNumber;
+	} else {
+	    ctxt->xpathCtxt->namespaces = NULL;
+	    ctxt->xpathCtxt->nsNr = 0;
+	}
+#else
 	ctxt->xpathCtxt->namespaces = comp->nsList;
 	ctxt->xpathCtxt->nsNr = comp->nsNr;
+#endif
 	res = xmlXPathCompiledEval(comp->comp, ctxt->xpathCtxt);
 	if (res != NULL) {
 	    if (res->type != XPATH_STRING)
@@ -745,6 +1071,11 @@ xsltComputeSortResult(xsltTransformContextPtr ctxt, xmlNodePtr sort) {
 void	
 xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 	           int nbsorts) {
+#ifdef XSLT_REFACTORED
+    xsltStyleItemSortPtr comp;
+#else
+    xsltStylePreCompPtr comp;
+#endif
     xmlXPathObjectPtr *resultsTab[XSLT_MAX_SORT];
     xmlXPathObjectPtr *results = NULL, *res;
     xmlNodeSetPtr list = NULL;
@@ -754,8 +1085,7 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
     int tst;
     int depth;
     xmlNodePtr node;
-    xmlXPathObjectPtr tmp;
-    xsltStylePreCompPtr comp;
+    xmlXPathObjectPtr tmp;    
     int tempstype[XSLT_MAX_SORT], temporder[XSLT_MAX_SORT];
 
     if ((ctxt == NULL) || (sorts == NULL) || (nbsorts <= 0) ||
@@ -763,7 +1093,7 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 	return;
     if (sorts[0] == NULL)
 	return;
-    comp = sorts[0]->_private;
+    comp = sorts[0]->psvi;
     if (comp == NULL)
 	return;
 
@@ -772,7 +1102,7 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 	return; /* nothing to do */
 
     for (j = 0; j < nbsorts; j++) {
-	comp = sorts[j]->_private;
+	comp = sorts[j]->psvi;
 	tempstype[j] = 0;
 	if ((comp->stype == NULL) && (comp->has_stype != 0)) {
 	    comp->stype =
@@ -823,7 +1153,7 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 
     results = resultsTab[0];
 
-    comp = sorts[0]->_private;
+    comp = sorts[0]->psvi;
     descending = comp->descending;
     number = comp->number;
     if (results == NULL)
@@ -877,7 +1207,7 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 		    while (depth < nbsorts) {
 			if (sorts[depth] == NULL)
 			    break;
-			comp = sorts[depth]->_private;
+			comp = sorts[depth]->psvi;
 			if (comp == NULL)
 			    break;
 			desc = comp->descending;
@@ -968,15 +1298,15 @@ xsltDefaultSortFunction(xsltTransformContextPtr ctxt, xmlNodePtr *sorts,
 #endif
 
     for (j = 0; j < nbsorts; j++) {
-	comp = sorts[j]->_private;
+	comp = sorts[j]->psvi;
 	if (tempstype[j] == 1) {
 	    /* The data-type needs to be recomputed each time */
-	    xmlFree(comp->stype);
+	    xmlFree((void *)(comp->stype));
 	    comp->stype = NULL;
 	}
 	if (temporder[j] == 1) {
 	    /* The order needs to be recomputed each time */
-	    xmlFree(comp->order);
+	    xmlFree((void *)(comp->order));
 	    comp->order = NULL;
 	}
 	if (resultsTab[j] != NULL) {
@@ -1042,6 +1372,40 @@ xsltSetSortFunc(xsltSortFunc handler) {
 void 
 xsltSetCtxtSortFunc(xsltTransformContextPtr ctxt, xsltSortFunc handler) {
     ctxt->sortfunc = handler;
+}
+
+/************************************************************************
+ * 									*
+ * 				Parsing options				*
+ * 									*
+ ************************************************************************/
+
+/**
+ * xsltSetCtxtParseOptions:
+ * @ctxt:  a XSLT process context
+ * @options:  a combination of libxml2 xmlParserOption
+ * 
+ * Change the default parser option passed by the XSLT engine to the 
+ * parser when using document() loading.
+ *
+ * Returns the previous options or -1 in case of error
+ */
+int 
+xsltSetCtxtParseOptions(xsltTransformContextPtr ctxt, int options)
+{
+    int oldopts;
+
+    if (ctxt == NULL)
+        return(-1);
+    oldopts = ctxt->parserOptions;
+    if (ctxt->xinclude)
+        oldopts |= XML_PARSE_XINCLUDE;
+    ctxt->parserOptions = options;
+    if (options & XML_PARSE_XINCLUDE)
+        ctxt->xinclude = 1;
+    else
+        ctxt->xinclude = 0;
+    return(oldopts);
 }
 
 /************************************************************************
@@ -1197,7 +1561,9 @@ xsltSaveResultTo(xmlOutputBufferPtr buf, xmlDocPtr result,
 	    while (child != NULL) {
 		xmlNodeDumpOutput(buf, result, child, 0, (indent == 1),
 			          (const char *) encoding);
-		if (child->type == XML_DTD_NODE)
+		if ((child->type == XML_DTD_NODE) ||
+		    ((child->type == XML_COMMENT_NODE) &&
+		     (child->next != NULL)))
 		    xmlOutputBufferWriteString(buf, "\n");
 		child = child->next;
 	    }
@@ -1360,9 +1726,9 @@ xsltSaveResultToFd(int fd, xmlDocPtr result, xsltStylesheetPtr style) {
  * @style:  the stylesheet
  *
  * Save the result @result obtained by applying the @style stylesheet
- * to a file or @URL
+ * to a new allocated string.
  *
- * Returns the number of byte written or -1 in case of failure.
+ * Returns 0 in case of success and -1 in case of error
  */
 int
 xsltSaveResultToString(xmlChar **doc_txt_ptr, int * doc_txt_len, 
@@ -1724,6 +2090,71 @@ xsltGetProfileInformation(xsltTransformContextPtr ctxt)
 
 /************************************************************************
  * 									*
+ * 		Hooks for libxml2 XPath					*
+ * 									*
+ ************************************************************************/
+
+/**
+ * xsltXPathCompile:
+ * @style: the stylesheet
+ * @str:  the XPath expression
+ *
+ * Compile an XPath expression
+ *
+ * Returns the xmlXPathCompExprPtr resulting from the compilation or NULL.
+ *         the caller has to free the object.
+ */
+xmlXPathCompExprPtr
+xsltXPathCompile(xsltStylesheetPtr style, const xmlChar *str) {
+    xmlXPathContextPtr xpathCtxt;
+    xmlXPathCompExprPtr ret;
+
+    if (style != NULL) {
+#ifdef XSLT_REFACTORED_XPATHCOMP
+	if (XSLT_CCTXT(style)) {
+	    /*
+	    * Proposed by Jerome Pesenti
+	    * --------------------------
+	    * For better efficiency we'll reuse the compilation
+	    * context's XPath context. For the common stylesheet using
+	    * XPath expressions this will reduce compilation time to
+	    * about 50%.
+	    *
+	    * See http://mail.gnome.org/archives/xslt/2006-April/msg00037.html
+	    */
+	    xpathCtxt = XSLT_CCTXT(style)->xpathCtxt;
+	    xpathCtxt->doc = style->doc;
+	} else
+	    xpathCtxt = xmlXPathNewContext(style->doc);	
+#else
+	xpathCtxt = xmlXPathNewContext(style->doc);
+#endif
+	xpathCtxt->dict = style->dict;
+    } else {
+	xpathCtxt = xmlXPathNewContext(NULL);
+    }
+    /*
+    * Compile the expression.
+    */
+    ret = xmlXPathCtxtCompile(xpathCtxt, str);
+
+#ifdef XSLT_REFACTORED_XPATHCOMP
+    if ((style == NULL) || (! XSLT_CCTXT(style))) {
+	xmlXPathFreeContext(xpathCtxt);
+    }
+#else
+    xmlXPathFreeContext(xpathCtxt);
+#endif
+    /*
+     * TODO: there is a lot of optimizations which should be possible
+     *       like variable slot precomputations, function precomputations, etc.
+     */
+
+    return(ret);
+}
+
+/************************************************************************
+ * 									*
  * 		Hooks for the debugger					*
  * 									*
  ************************************************************************/
@@ -1848,5 +2279,4 @@ xslDropCall(void)
     if (xsltDebuggerCurrentCallbacks.drop != NULL)
 	xsltDebuggerCurrentCallbacks.drop();
 }
-
 
