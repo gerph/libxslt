@@ -34,6 +34,17 @@
 #include <ctype.h>
 #endif
 
+#ifndef HAVE_STAT
+#  ifdef HAVE__STAT
+     /* MS C library seems to define stat and _stat. The definition
+      *         is identical. Still, mapping them to each other causes a warning. */
+#    ifndef _MSC_VER
+#      define stat(x,y) _stat(x,y)
+#    endif
+#    define HAVE_STAT
+#  endif
+#endif
+
 #include <libxml/xmlmemory.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
@@ -269,6 +280,57 @@ xsltCheckFilename (const char *path)
     return 1;
 }
 
+static int
+xsltCheckWritePath(xsltSecurityPrefsPtr sec,
+		   xsltTransformContextPtr ctxt,
+		   const char *path)
+{
+    int ret;
+    xsltSecurityCheck check;
+    char *directory;
+
+    check = xsltGetSecurityPrefs(sec, XSLT_SECPREF_WRITE_FILE);
+    if (check != NULL) {
+	ret = check(sec, ctxt, path);
+	if (ret == 0) {
+	    xsltTransformError(ctxt, NULL, NULL,
+			       "File write for %s refused\n", path);
+	    return(0);
+	}
+    }
+
+    directory = xmlParserGetDirectory (path);
+
+    if (directory != NULL) {
+	ret = xsltCheckFilename(directory);
+	if (ret == 0) {
+	    /*
+	     * The directory doesn't exist check for creation
+	     */
+	    check = xsltGetSecurityPrefs(sec,
+					 XSLT_SECPREF_CREATE_DIRECTORY);
+	    if (check != NULL) {
+		ret = check(sec, ctxt, directory);
+		if (ret == 0) {
+		    xsltTransformError(ctxt, NULL, NULL,
+				       "Directory creation for %s refused\n",
+				       path);
+		    xmlFree(directory);
+		    return(0);
+		}
+	    }
+	    ret = xsltCheckWritePath(sec, ctxt, directory);
+	    if (ret == 1)
+		ret = mkdir(directory, 0755);
+	}
+	xmlFree(directory);
+	if (ret < 0)
+	    return(ret);
+    }
+
+    return(1);
+}
+
 /**
  * xsltCheckWrite:
  * @sec:  the security options
@@ -299,49 +361,14 @@ xsltCheckWrite(xsltSecurityPrefsPtr sec,
     }
     if ((uri->scheme == NULL) ||
 	(xmlStrEqual(BAD_CAST uri->scheme, BAD_CAST "file"))) {
-	char *directory;
 
 	/*
 	 * Check if we are allowed to write this file
 	 */
-	check = xsltGetSecurityPrefs(sec, XSLT_SECPREF_WRITE_FILE);
-	if (check != NULL) {
-	    ret = check(sec, ctxt, uri->path);
-	    if (ret == 0) {
-		xsltTransformError(ctxt, NULL, NULL,
-			     "File write for %s refused\n", URL);
-		xmlFreeURI(uri);
-		return(0);
-	    }
-	}
-
-	directory = xmlParserGetDirectory (uri->path);
-	if (directory != NULL) {
-	    ret = xsltCheckFilename(directory);
-	    if (ret == 0) {
-		/*
-		 * The directory doesn't exist check for creation
-		 */
-		check = xsltGetSecurityPrefs(sec,
-				 XSLT_SECPREF_CREATE_DIRECTORY);
-		if (check != NULL) {
-		    ret = check(sec, ctxt, directory);
-		    if (ret == 0) {
-			xsltTransformError(ctxt, NULL, NULL,
-					 "Directory creation for %s refused\n",
-					 URL);
-			xmlFree(directory);
-			xmlFreeURI(uri);
-			return(0);
-		    }
-		}
-		ret = xsltCheckWrite(sec, ctxt, (const xmlChar *)directory);
-		if (ret == 1)
-		    ret = mkdir(directory, 0755);
-		if (ret < 0)
-		    return(ret);
-	    }
-	    xmlFree(directory);
+	ret = xsltCheckWritePath(sec, ctxt, uri->path);
+	if (ret <= 0) {
+	    xmlFreeURI(uri);
+	    return(ret);
 	}
     } else {
 	/*
@@ -349,7 +376,7 @@ xsltCheckWrite(xsltSecurityPrefsPtr sec,
 	 */
 	check = xsltGetSecurityPrefs(sec, XSLT_SECPREF_WRITE_NETWORK);
 	if (check != NULL) {
-	    ret = check(sec, ctxt, uri->path);
+	    ret = check(sec, ctxt, (const char *)URL);
 	    if (ret == 0) {
 		xsltTransformError(ctxt, NULL, NULL,
 			     "File write for %s refused\n", URL);
@@ -409,7 +436,7 @@ xsltCheckRead(xsltSecurityPrefsPtr sec,
 	 */
 	check = xsltGetSecurityPrefs(sec, XSLT_SECPREF_READ_NETWORK);
 	if (check != NULL) {
-	    ret = check(sec, ctxt, uri->path);
+	    ret = check(sec, ctxt, (const char *)URL);
 	    if (ret == 0) {
 		xsltTransformError(ctxt, NULL, NULL,
 			     "Network file read for %s refused\n", URL);

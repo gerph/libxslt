@@ -12,16 +12,12 @@
 #ifndef __XML_XSLTUTILS_H__
 #define __XML_XSLTUTILS_H__
 
-#if defined(WIN32) && defined(_MSC_VER)
-#include <libxslt/xsltwin32config.h>
-#else
 #include <libxslt/xsltconfig.h>
-#endif
-
 #ifdef HAVE_STDARG_H
 #include <stdarg.h>
 #endif
 #include <libxml/xpath.h>
+#include <libxml/dict.h>
 #include <libxml/xmlerror.h>
 #include "xsltexports.h"
 #include "xsltInternals.h"
@@ -76,19 +72,28 @@ extern "C" {
     (((n) != NULL) &&							\
      (((n)->type == XML_ELEMENT_NODE) ||				\
       ((n)->type == XML_TEXT_NODE) ||					\
+      ((n)->type == XML_CDATA_SECTION_NODE) ||				\
       ((n)->type == XML_ATTRIBUTE_NODE) ||				\
       ((n)->type == XML_DOCUMENT_NODE) ||				\
       ((n)->type == XML_HTML_DOCUMENT_NODE) ||				\
-      ((n)->type == XML_PI_NODE)))
+      ((n)->type == XML_COMMENT_NODE) ||				\
+      ((n)->type == XML_PI_NODE)))      
 
 /*
  * Our own version of namespaced atributes lookup.
  */
-XSLTPUBFUN xmlChar * XSLTCALL	xsltGetNsProp	(xmlNodePtr node,
-						 const xmlChar *name,
-						 const xmlChar *nameSpace);
-XSLTPUBFUN int XSLTCALL		xsltGetUTF8Char	(const unsigned char *utf,
-						 int *len);
+XSLTPUBFUN xmlChar * XSLTCALL
+		xsltGetNsProp	(xmlNodePtr node,
+				 const xmlChar *name,
+				 const xmlChar *nameSpace);
+XSLTPUBFUN const xmlChar * XSLTCALL
+		xsltGetCNsProp	(xsltStylesheetPtr style,
+				 xmlNodePtr node,
+				 const xmlChar *name,
+				 const xmlChar *nameSpace);
+XSLTPUBFUN int XSLTCALL
+		xsltGetUTF8Char	(const unsigned char *utf,
+				 int *len);
 
 /*
  * XSLT Debug Tracing Tracing Types
@@ -115,6 +120,11 @@ typedef enum {
 	XSLT_TRACE_VARIABLES = 		1<<16
 } xsltDebugTraceCodes;
 
+/**
+ * XSLT_TRACE:
+ *
+ * Control the type of xsl debugtrace messages emitted.
+ */
 #define XSLT_TRACE(ctxt,code,call)	\
 	if (ctxt->traceCode && (*(ctxt->traceCode) & code)) \
 	    call
@@ -157,6 +167,9 @@ XSLTPUBFUN void XSLTCALL
 						 const char *msg,
 						 ...);
 
+XSLTPUBFUN int XSLTCALL
+		xsltSetCtxtParseOptions		(xsltTransformContextPtr ctxt,
+						 int options);
 /*
  * Sorting.
  */
@@ -184,9 +197,18 @@ XSLTPUBFUN xmlXPathObjectPtr * XSLTCALL
  * QNames handling.
  */
 
+XSLTPUBFUN const xmlChar * XSLTCALL
+		xsltSplitQName			(xmlDictPtr dict,
+						 const xmlChar *name,
+						 const xmlChar **prefix);
 XSLTPUBFUN const xmlChar * XSLTCALL 
     		xsltGetQNameURI			(xmlNodePtr node,
 						 xmlChar **name);
+
+XSLTPUBFUN const xmlChar * XSLTCALL
+		xsltGetQNameURI2		(xsltStylesheetPtr style,
+						 xmlNodePtr node,
+						 const xmlChar **name);
 
 /*
  * Output, reuse libxml I/O buffers.
@@ -213,6 +235,13 @@ XSLTPUBFUN int XSLTCALL
                                                  int * doc_txt_len, 
                                                  xmlDocPtr result, 
                                                  xsltStylesheetPtr style);
+
+/*
+ * XPath interface
+ */
+XSLTPUBFUN xmlXPathCompExprPtr XSLTCALL
+		xsltXPathCompile		(xsltStylesheetPtr style,
+						 const xmlChar *str);
 
 /*
  * Profiling.

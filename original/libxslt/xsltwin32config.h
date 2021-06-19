@@ -23,21 +23,28 @@ extern "C" {
  *
  * the version string like "1.2.3"
  */
-#define LIBXSLT_DOTTED_VERSION "1.1.1"
+#define LIBXSLT_DOTTED_VERSION "1.1.18"
 
 /**
  * LIBXSLT_VERSION:
  *
  * the version number: 1.2.3 value is 1002003
  */
-#define LIBXSLT_VERSION 10101
+#define LIBXSLT_VERSION 10118
 
 /**
  * LIBXSLT_VERSION_STRING:
  *
  * the version number string, 1.2.3 value is "1002003"
  */
-#define LIBXSLT_VERSION_STRING "10101"
+#define LIBXSLT_VERSION_STRING "10118"
+
+/**
+ * LIBXSLT_VERSION_EXTRA:
+ *
+ * extra version information, used to show a CVS compilation
+ */
+#define LIBXSLT_VERSION_EXTRA "-win32"
 
 /**
  * WITH_XSLT_DEBUG:
@@ -48,6 +55,18 @@ extern "C" {
  */
 #if 1
 #define WITH_XSLT_DEBUG
+#endif
+
+/**
+ * WITH_MODULES:
+ *
+ * Whether module support is configured into libxslt
+ */
+#if 1
+#ifndef WITH_MODULES
+#define WITH_MODULES
+#endif
+#define LIBXSLT_PLUGINS_PATH() getenv("LIBXSLT_PLUGINS_PATH")
 #endif
 
 #if 0

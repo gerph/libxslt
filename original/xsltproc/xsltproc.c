@@ -57,10 +57,6 @@
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <winsock2.h>
 #define gettimeofday(p1,p2)
-#define HAVE_TIME_H
-#include <time.h>
-#define HAVE_STDARG_H
-#include <stdarg.h>
 #define snprintf _snprintf
 #endif /* _MS_VER */
 #else /* WIN32 */
@@ -75,38 +71,28 @@
 #include <sys/timeb.h>
 #endif
 
-#ifndef HAVE_STAT
-#  ifdef HAVE__STAT
-     /* MS C library seems to define stat and _stat. The definition
-      *         is identical. Still, mapping them to each other causes a warning. */
-#    ifndef _MSC_VER
-#      define stat(x,y) _stat(x,y)
-#    endif
-#    define HAVE_STAT
-#  endif
-#endif
-
 static int debug = 0;
 static int repeat = 0;
 static int timing = 0;
 static int dumpextensions = 0;
 static int novalid = 0;
+static int nodtdattr = 0;
 static int noout = 0;
+static int nodict = 0;
 #ifdef LIBXML_HTML_ENABLED
 static int html = 0;
 #endif
 static int load_trace = 0;
 #ifdef LIBXML_XINCLUDE_ENABLED
 static int xinclude = 0;
+static int xincludestyle = 0;
 #endif
 static int profile = 0;
 
 #define MAX_PARAMETERS 64
 #define MAX_PATHS 64
 
-#if LIBXML_VERSION >= 20600
 static int options = XSLT_PARSE_OPTIONS;
-#endif
 static const char *params[MAX_PARAMETERS + 1];
 static int nbparams = 0;
 static xmlChar *strparams[MAX_PARAMETERS + 1];
@@ -394,26 +380,22 @@ xsltProcess(xmlDocPtr doc, xsltStylesheetPtr cur, const char *filename) {
 		res = xsltApplyStylesheet(cur, doc, params);
 		xmlFreeDoc(res);
 		xmlFreeDoc(doc);
-#if LIBXML_VERSION >= 20600
 #ifdef LIBXML_HTML_ENABLED
 		if (html)
 		    doc = htmlReadFile(filename, NULL, options);
 		else
 #endif
 		    doc = xmlReadFile(filename, NULL, options);
-#else
-#ifdef LIBXML_HTML_ENABLED
-		if (html)
-		    doc = htmlParseFile(filename, NULL);
-		else
-#endif
-		    doc = xmlParseFile(filename);
-#endif
 	    }
 	}
 	ctxt = xsltNewTransformContext(cur, doc);
 	if (ctxt == NULL)
 	    return;
+	xsltSetCtxtParseOptions(ctxt, options);
+#ifdef LIBXML_XINCLUDE_ENABLED
+	if (xinclude)
+	    ctxt->xinclude = 1;
+#endif
 	if (profile) {
 	    res = xsltApplyStylesheetUser(cur, doc, params, NULL,
 		                          stderr, ctxt);
@@ -423,7 +405,7 @@ xsltProcess(xmlDocPtr doc, xsltStylesheetPtr cur, const char *filename) {
 	}
 	if (ctxt->state == XSLT_STATE_ERROR)
 	    errorno = 9;
-	if (ctxt->state == XSLT_STATE_STOPPED)
+	else if (ctxt->state == XSLT_STATE_STOPPED)
 	    errorno = 10;
 	xsltFreeTransformContext(ctxt);
 	if (timing) {
@@ -487,6 +469,8 @@ xsltProcess(xmlDocPtr doc, xsltStylesheetPtr cur, const char *filename) {
 	}
 	if (ctxt->state == XSLT_STATE_ERROR)
 	    errorno = 9;
+	else if (ctxt->state == XSLT_STATE_STOPPED)
+	    errorno = 10;
 	xsltFreeTransformContext(ctxt);
 	if (timing)
 	    endTimer("Running stylesheet and saving result");
@@ -507,11 +491,10 @@ static void usage(const char *name) {
 #endif
     printf("\t--dumpextensions: dump the registered extension elements and functions to stdout\n");
     printf("\t--novalid skip the Dtd loading phase\n");
+    printf("\t--nodtdattr do not default attributes from the DTD\n");
     printf("\t--noout: do not dump the result\n");
     printf("\t--maxdepth val : increase the maximum depth\n");
-#if LIBXML_VERSION >= 20600
     printf("\t--maxparserdepth val : increase the maximum parser depth\n");
-#endif
 #ifdef LIBXML_HTML_ENABLED
     printf("\t--html: the input document is(are) an HTML file(s)\n");
 #endif
@@ -531,7 +514,8 @@ static void usage(const char *name) {
     printf("\t         file:///etc/xml/catalog are activated by default\n");
 #endif
 #ifdef LIBXML_XINCLUDE_ENABLED
-    printf("\t--xinclude : do XInclude processing on document intput\n");
+    printf("\t--xinclude : do XInclude processing on document input\n");
+    printf("\t--xincludestyle : do XInclude processing on stylesheets\n");
 #endif
     printf("\t--load-trace : print trace of all external entites loaded\n");
     printf("\t--profile or --norman : dump profiling informations \n");
@@ -606,6 +590,9 @@ main(int argc, char **argv)
         } else if ((!strcmp(argv[i], "-novalid")) ||
                    (!strcmp(argv[i], "--novalid"))) {
             novalid++;
+        } else if ((!strcmp(argv[i], "-nodtdattr")) ||
+                   (!strcmp(argv[i], "--nodtdattr"))) {
+            nodtdattr++;
         } else if ((!strcmp(argv[i], "-noout")) ||
                    (!strcmp(argv[i], "--noout"))) {
             noout++;
@@ -620,6 +607,9 @@ main(int argc, char **argv)
         } else if ((!strcmp(argv[i], "-profile")) ||
                    (!strcmp(argv[i], "--profile"))) {
             profile++;
+        } else if ((!strcmp(argv[i], "-nodict")) ||
+                   (!strcmp(argv[i], "--nodict"))) {
+            nodict++;
         } else if ((!strcmp(argv[i], "-norman")) ||
                    (!strcmp(argv[i], "--norman"))) {
             profile++;
@@ -664,6 +654,9 @@ main(int argc, char **argv)
         } else if ((!strcmp(argv[i], "-xinclude")) ||
                    (!strcmp(argv[i], "--xinclude"))) {
             xinclude++;
+        } else if ((!strcmp(argv[i], "-xincludestyle")) ||
+                   (!strcmp(argv[i], "--xincludestyle"))) {
+            xincludestyle++;
             xsltSetXIncludeDefault(1);
 #endif
         } else if ((!strcmp(argv[i], "-load-trace")) ||
@@ -716,7 +709,6 @@ main(int argc, char **argv)
                 if (value > 0)
                     xsltMaxDepth = value;
             }
-#if LIBXML_VERSION >= 20600
         } else if ((!strcmp(argv[i], "-maxparserdepth")) ||
                    (!strcmp(argv[i], "--maxparserdepth"))) {
             int value;
@@ -726,7 +718,6 @@ main(int argc, char **argv)
                 if (value > 0)
                     xmlParserMaxDepth = value;
             }
-#endif
         } else if ((!strcmp(argv[i],"-dumpextensions"))||
 			(!strcmp(argv[i],"--dumpextensions"))) {
 		dumpextensions++;
@@ -739,17 +730,12 @@ main(int argc, char **argv)
     }
     params[nbparams] = NULL;
 
-#if LIBXML_VERSION < 20600
-    /*
-     * The old parser interfaces uses the global variables
-     */
-    if (novalid == 0)
-        xmlLoadExtDtdDefaultValue = XML_DETECT_IDS | XML_COMPLETE_ATTRS;
-    else
-        xmlLoadExtDtdDefaultValue = 0;
-    xmlSubstituteEntitiesDefault(1);
-    xmlLineNumbersDefault(1);
-#endif
+    if (novalid != 0)
+	options = XML_PARSE_NOENT | XML_PARSE_NOCDATA;
+    else if (nodtdattr)
+        options = XML_PARSE_NOENT | XML_PARSE_DTDLOAD | XML_PARSE_NOCDATA;
+    if (nodict != 0)
+        options |= XML_PARSE_NODICT;
 
     /*
      * Register the EXSLT extensions and the test module
@@ -765,12 +751,10 @@ main(int argc, char **argv)
             (!strcmp(argv[i], "--maxdepth"))) {
             i++;
             continue;
-#if LIBXML_VERSION >= 20600
         } else if ((!strcmp(argv[i], "-maxparserdepth")) ||
             (!strcmp(argv[i], "--maxparserdepth"))) {
             i++;
             continue;
-#endif
         } else if ((!strcmp(argv[i], "-o")) ||
                    (!strcmp(argv[i], "-output")) ||
                    (!strcmp(argv[i], "--output"))) {
@@ -797,13 +781,23 @@ main(int argc, char **argv)
         if ((argv[i][0] != '-') || (strcmp(argv[i], "-") == 0)) {
             if (timing)
                 startTimer();
-#if LIBXML_VERSION >= 20600
 	    style = xmlReadFile((const char *) argv[i], NULL, options);
-#else
-	    style = xmlParseFile((const char *) argv[i]);
-#endif
             if (timing) 
 		endTimer("Parsing stylesheet %s", argv[i]);
+	    if (xincludestyle) {
+		if (style != NULL) {
+		    if (timing)
+			startTimer();
+#if LIBXML_VERSION >= 20603
+		    xmlXIncludeProcessFlags(style, XSLT_PARSE_OPTIONS);
+#else
+		    xmlXIncludeProcess(style);
+#endif
+		    if (timing) {
+			endTimer("XInclude processing %s", argv[i]);
+		    }
+		}
+	    }
 	    if (style == NULL) {
 		fprintf(stderr,  "cannot parse %s\n", argv[i]);
 		cur = NULL;
@@ -835,35 +829,18 @@ main(int argc, char **argv)
         }
     }
 
-#if LIBXML_VERSION < 20600
-    /*
-     * The old parser interfaces uses the global variables
-     * disable CDATA from being built in the document tree
-     */
-    xmlDefaultSAXHandlerInit();
-    xmlDefaultSAXHandler.cdataBlock = NULL;
-#endif
 
     if ((cur != NULL) && (cur->errors == 0)) {
         for (; i < argc; i++) {
 	    doc = NULL;
             if (timing)
                 startTimer();
-#if LIBXML_VERSION >= 20600
 #ifdef LIBXML_HTML_ENABLED
             if (html)
                 doc = htmlReadFile(argv[i], NULL, options);
             else
 #endif
                 doc = xmlReadFile(argv[i], NULL, options);
-#else
-#ifdef LIBXML_HTML_ENABLED
-            if (html)
-                doc = htmlParseFile(argv[i], NULL);
-            else
-#endif
-                doc = xmlParseFile(argv[i]);
-#endif
             if (doc == NULL) {
                 fprintf(stderr, "unable to parse %s\n", argv[i]);
 		errorno = 6;

@@ -28,6 +28,10 @@
 #include "config.h"
 #endif
 
+#if HAVE_LOCALTIME_R	/* _POSIX_SOURCE required by gnu libc */
+#define _POSIX_SOURCE
+#endif
+
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
@@ -41,12 +45,19 @@
 
 #include <string.h>
 
-#ifdef HAVE_TIME_H
-#include <time.h>
-#endif
-
 #ifdef HAVE_MATH_H
 #include <math.h>
+#endif
+
+/* needed to get localtime_r on Solaris */
+#ifdef __sun
+#ifndef __EXTENSIONS__
+#define __EXTENSIONS__
+#endif
+#endif
+
+#ifdef HAVE_TIME_H
+#include <time.h>
 #endif
 
 /*
@@ -78,7 +89,7 @@ struct _exsltDateValDate {
     unsigned int	min	:6;	/* 0 <=  min    <= 59	*/
     double		sec;
     unsigned int	tz_flag	:1;	/* is tzo explicitely set? */
-    int			tzo	:11;	/* -1440 <= tzo <= 1440 */
+    signed int		tzo	:12;	/* -1440 <= tzo <= 1440 currently only -840 to +840 are needed */
 };
 
 /* Duration value */
@@ -106,8 +117,10 @@ struct _exsltDateVal {
  *								*
  ****************************************************************/
 
-#if defined(HAVE_TIME_H) && defined(HAVE_LOCALTIME)		\
-    && defined(HAVE_TIME) && defined(HAVE_GMTIME)
+#if defined(HAVE_TIME_H) 					\
+    && (defined(HAVE_LOCALTIME) || defined(HAVE_LOCALTIME_R))	\
+    && (defined(HAVE_GMTIME) || defined(HAVE_GMTIME_R))		\
+    && defined(HAVE_TIME)
 #define WITH_TIME
 #endif
 
@@ -120,6 +133,7 @@ struct _exsltDateVal {
 #define IS_TZO_CHAR(c)						\
 	((c == 0) || (c == 'Z') || (c == '+') || (c == '-'))
 
+#define VALID_ALWAYS(num)	(num >= 0)
 #define VALID_YEAR(yr)          (yr != 0)
 #define VALID_MONTH(mon)        ((mon >= 1) && (mon <= 12))
 /* VALID_DAY should only be used when month is unknown */
@@ -185,7 +199,8 @@ static const unsigned long dayInLeapYearByMonth[12] =
  * Returns 0 or the error code
  */
 static int
-_exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str) {
+_exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str)
+{
     const xmlChar *cur = *str, *firstChar;
     int isneg = 0, digcnt = 0;
 
@@ -264,6 +279,7 @@ _exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str) {
  * PARSE_2_DIGITS:
  * @num:  the integer to fill in
  * @cur:  an #xmlChar *
+ * @func: validation function for the number
  * @invalid: an integer
  *
  * Parses a 2-digits integer and updates @num with the value. @cur is
@@ -271,12 +287,18 @@ _exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str) {
  * In case of error, @invalid is set to %TRUE, values of @num and
  * @cur are undefined.
  */
-#define PARSE_2_DIGITS(num, cur, invalid)			\
+#define PARSE_2_DIGITS(num, cur, func, invalid)			\
 	if ((cur[0] < '0') || (cur[0] > '9') ||			\
 	    (cur[1] < '0') || (cur[1] > '9'))			\
 	    invalid = 1;					\
-	else							\
-	    num = (cur[0] - '0') * 10 + (cur[1] - '0');		\
+	else {							\
+	    int val;						\
+	    val = (cur[0] - '0') * 10 + (cur[1] - '0');		\
+	    if (!func(val))					\
+	        invalid = 2;					\
+	    else						\
+	        num = val;					\
+	}							\
 	cur += 2;
 
 /**
@@ -306,7 +328,7 @@ _exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str) {
  * @cur are undefined.
  */
 #define PARSE_FLOAT(num, cur, invalid)				\
-	PARSE_2_DIGITS(num, cur, invalid);			\
+	PARSE_2_DIGITS(num, cur, VALID_ALWAYS, invalid);	\
 	if (!invalid && (*cur == '.')) {			\
 	    double mult = 1;				        \
 	    cur++;						\
@@ -354,16 +376,14 @@ _exsltDateParseGYear (exsltDateValDatePtr dt, const xmlChar **str) {
  * Returns 0 or the error code
  */
 static int
-_exsltDateParseGMonth (exsltDateValDatePtr dt, const xmlChar **str) {
+_exsltDateParseGMonth (exsltDateValDatePtr dt, const xmlChar **str)
+{
     const xmlChar *cur = *str;
     int ret = 0;
 
-    PARSE_2_DIGITS(dt->mon, cur, ret);
+    PARSE_2_DIGITS(dt->mon, cur, VALID_MONTH, ret);
     if (ret != 0)
 	return ret;
-
-    if (!VALID_MONTH(dt->mon))
-	return 2;
 
     *str = cur;
 
@@ -398,16 +418,14 @@ _exsltDateParseGMonth (exsltDateValDatePtr dt, const xmlChar **str) {
  * Returns 0 or the error code
  */
 static int
-_exsltDateParseGDay (exsltDateValDatePtr dt, const xmlChar **str) {
+_exsltDateParseGDay (exsltDateValDatePtr dt, const xmlChar **str)
+{
     const xmlChar *cur = *str;
     int ret = 0;
 
-    PARSE_2_DIGITS(dt->day, cur, ret);
+    PARSE_2_DIGITS(dt->day, cur, VALID_DAY, ret);
     if (ret != 0)
 	return ret;
-
-    if (!VALID_DAY(dt->day))
-	return 2;
 
     *str = cur;
 
@@ -460,12 +478,13 @@ _exsltDateParseGDay (exsltDateValDatePtr dt, const xmlChar **str) {
  * Returns 0 or the error code
  */
 static int
-_exsltDateParseTime (exsltDateValDatePtr dt, const xmlChar **str) {
+_exsltDateParseTime (exsltDateValDatePtr dt, const xmlChar **str)
+{
     const xmlChar *cur = *str;
     unsigned int hour = 0; /* use temp var in case str is not xs:time */
     int ret = 0;
 
-    PARSE_2_DIGITS(hour, cur, ret);
+    PARSE_2_DIGITS(hour, cur, VALID_HOUR, ret);
     if (ret != 0)
 	return ret;
 
@@ -476,7 +495,7 @@ _exsltDateParseTime (exsltDateValDatePtr dt, const xmlChar **str) {
     /* the ':' insures this string is xs:time */
     dt->hour = hour;
 
-    PARSE_2_DIGITS(dt->min, cur, ret);
+    PARSE_2_DIGITS(dt->min, cur, VALID_MIN, ret);
     if (ret != 0)
 	return ret;
 
@@ -531,13 +550,14 @@ _exsltDateParseTime (exsltDateValDatePtr dt, const xmlChar **str) {
  * Returns 0 or the error code
  */
 static int
-_exsltDateParseTimeZone (exsltDateValDatePtr dt, const xmlChar **str) {
-    const xmlChar *cur = *str;
+_exsltDateParseTimeZone (exsltDateValDatePtr dt, const xmlChar **str)
+{
+    const xmlChar *cur;
     int ret = 0;
 
     if (str == NULL)
 	return -1;
-
+    cur = *str;
     switch (*cur) {
     case 0:
 	dt->tz_flag = 0;
@@ -557,11 +577,9 @@ _exsltDateParseTimeZone (exsltDateValDatePtr dt, const xmlChar **str) {
 
 	cur++;
 
-	PARSE_2_DIGITS(tmp, cur, ret);
+	PARSE_2_DIGITS(tmp, cur, VALID_HOUR, ret);
 	if (ret != 0)
 	    return ret;
-	if (!VALID_HOUR(tmp))
-	    return 2;
 
 	if (*cur != ':')
 	    return 1;
@@ -569,11 +587,9 @@ _exsltDateParseTimeZone (exsltDateValDatePtr dt, const xmlChar **str) {
 
 	dt->tzo = tmp * 60;
 
-	PARSE_2_DIGITS(tmp, cur, ret);
+	PARSE_2_DIGITS(tmp, cur, VALID_MIN, ret);
 	if (ret != 0)
 	    return ret;
-	if (!VALID_MIN(tmp))
-	    return 2;
 
 	dt->tzo += tmp;
 	if (isneg)
@@ -637,7 +653,8 @@ _exsltDateParseTimeZone (exsltDateValDatePtr dt, const xmlChar **str) {
  * Returns the #exsltDateValPtr
  */
 static exsltDateValPtr
-exsltDateCreateDate (exsltDateType type) {
+exsltDateCreateDate (exsltDateType type)
+{
     exsltDateValPtr ret;
 
     ret = (exsltDateValPtr) xmlMalloc(sizeof(exsltDateVal));
@@ -725,9 +742,16 @@ exsltDateFreeDate (exsltDateValPtr date) {
  * Returns the current date and time.
  */
 static exsltDateValPtr
-exsltDateCurrent (void) {
+exsltDateCurrent (void)
+{
     struct tm *localTm, *gmTm;
-    time_t secs;
+    time_t secs, gsecs;
+#if HAVE_LOCALTIME_R
+    struct tm localTmS;
+#endif
+#if HAVE_GMTIME_R
+    struct tm gmTmS;
+#endif
     exsltDateValPtr ret;
 
     ret = exsltDateCreateDate(XS_DATETIME);
@@ -736,7 +760,12 @@ exsltDateCurrent (void) {
 
     /* get current time */
     secs    = time(NULL);
+#if HAVE_LOCALTIME_R
+    localtime_r(&secs, &localTmS);
+    localTm = &localTmS;
+#else
     localTm = localtime(&secs);
+#endif
 
     /* get real year, not years since 1900 */
     ret->value.date.year = localTm->tm_year + 1900;
@@ -750,13 +779,22 @@ exsltDateCurrent (void) {
     ret->value.date.sec  = (double) localTm->tm_sec;
 
     /* determine the time zone offset from local to gm time */
+#if HAVE_GMTIME_R
+    gmtime_r(&secs, &gmTmS);
+    gmTm = &gmTmS;
+#else
     gmTm = gmtime(&secs);
+#endif
     ret->value.date.tz_flag = 0;
+#if 0
     ret->value.date.tzo = (((ret->value.date.day * 1440) +
                             (ret->value.date.hour * 60) +
                              ret->value.date.min) -
                            ((gmTm->tm_mday * 1440) + (gmTm->tm_hour * 60) +
                              gmTm->tm_min));
+#endif
+    gsecs = mktime(gmTm);
+    ret->value.date.tzo = (secs - gsecs) / 60;
 
     return ret;
 }
@@ -771,7 +809,8 @@ exsltDateCurrent (void) {
  * Returns a newly built #exsltDateValPtr of NULL in case of error
  */
 static exsltDateValPtr
-exsltDateParse (const xmlChar *dateTime) {
+exsltDateParse (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     int ret;
     const xmlChar *cur = dateTime;
@@ -920,7 +959,8 @@ error:
  * Returns a newly built #exsltDateValPtr of NULL in case of error
  */
 static exsltDateValPtr
-exsltDateParseDuration (const xmlChar *duration) {
+exsltDateParseDuration (const xmlChar *duration)
+{
     const xmlChar  *cur = duration;
     exsltDateValPtr dur;
     int isneg = 0;
@@ -1045,7 +1085,8 @@ error:
  * Returns a newly allocated string, or NULL in case of error
  */
 static xmlChar *
-exsltDateFormatDuration (const exsltDateValDurationPtr dt) {
+exsltDateFormatDuration (const exsltDateValDurationPtr dt)
+{
     xmlChar buf[100], *cur = buf;
     double secs, days;
     double years, months;
@@ -1123,7 +1164,8 @@ exsltDateFormatDuration (const exsltDateValDurationPtr dt) {
  * Returns a newly allocated string, or NULL in case of error
  */
 static xmlChar *
-exsltDateFormatDateTime (const exsltDateValDatePtr dt) {
+exsltDateFormatDateTime (const exsltDateValDatePtr dt)
+{
     xmlChar buf[100], *cur = buf;
 
     if ((dt == NULL) ||	!VALID_DATETIME(dt))
@@ -1148,7 +1190,8 @@ exsltDateFormatDateTime (const exsltDateValDatePtr dt) {
  * Returns a newly allocated string, or NULL in case of error
  */
 static xmlChar *
-exsltDateFormatDate (const exsltDateValDatePtr dt) {
+exsltDateFormatDate (const exsltDateValDatePtr dt)
+{
     xmlChar buf[100], *cur = buf;
 
     if ((dt == NULL) || !VALID_DATETIME(dt))
@@ -1172,7 +1215,8 @@ exsltDateFormatDate (const exsltDateValDatePtr dt) {
  * Returns a newly allocated string, or NULL in case of error
  */
 static xmlChar *
-exsltDateFormatTime (const exsltDateValDatePtr dt) {
+exsltDateFormatTime (const exsltDateValDatePtr dt)
+{
     xmlChar buf[100], *cur = buf;
 
     if ((dt == NULL) || !VALID_TIME(dt))
@@ -1198,7 +1242,8 @@ exsltDateFormatTime (const exsltDateValDatePtr dt) {
  * Returns a newly allocated string, or NULL in case of error
  */
 static xmlChar *
-exsltDateFormat (const exsltDateValPtr dt) {
+exsltDateFormat (const exsltDateValPtr dt)
+{
 
     if (dt == NULL)
 	return NULL;
@@ -1417,7 +1462,7 @@ _exsltDateAdd (exsltDateValPtr dt, exsltDateValPtr dur)
         d->mon = 1;
 
     /* normalize for time zone offset */
-    u->sec += (d->tzo * 60);
+    u->sec -= (d->tzo * 60);	/* changed from + to - (bug 153000) */
     d->tzo = 0;
 
     /* normalization */
@@ -1476,10 +1521,18 @@ _exsltDateAdd (exsltDateValPtr dt, exsltDateValPtr dur)
 
     while (1) {
         if (tempdays < 1) {
-            long tmon = (long)MODULO_RANGE(r->mon-1, 1, 13);
-            long tyr  = r->year + (long)FQUOTIENT_RANGE(r->mon-1, 1, 13);
+            long tmon = (long)MODULO_RANGE((int)r->mon-1, 1, 13);
+            long tyr  = r->year + (long)FQUOTIENT_RANGE((int)r->mon-1, 1, 13);
             if (tyr == 0)
                 tyr--;
+	    /*
+	     * Coverity detected an overrun in daysInMonth 
+	     * of size 12 at position 12 with index variable "((r)->mon - 1)"
+	     */
+	    if (tmon < 0)
+	        tmon = 0;
+	    if (tmon > 12)
+	        tmon = 12;
             tempdays += MAX_DAYINMONTH(tyr, tmon);
             carry = -1;
         } else if (tempdays > (long)MAX_DAYINMONTH(r->year, r->mon)) {
@@ -1619,26 +1672,21 @@ _exsltDateDifference (exsltDateValPtr x, exsltDateValPtr y, int flag)
 }
 
 /**
- * _exsltDateAddDuration:
- * @x: an #exsltDateValPtr of type #XS_DURATION
- * @y: an #exsltDateValPtr of type #XS_DURATION
+ * _exsltDateAddDurCalc
+ * @ret: an exsltDateValPtr for the return value:
+ * @x: an exsltDateValPtr for the first operand
+ * @y: an exsltDateValPtr for the second operand
  *
- * Compute a new duration from @x and @y.
+ * Add two durations, catering for possible negative values.
+ * The sum is placed in @ret.
  *
- * Returns date/time pointer or NULL.
+ * Returns 1 for success, 0 if error detected.
  */
-static exsltDateValPtr
-_exsltDateAddDuration (exsltDateValPtr x, exsltDateValPtr y)
+static int
+_exsltDateAddDurCalc (exsltDateValPtr ret, exsltDateValPtr x,
+		      exsltDateValPtr y)
 {
-    exsltDateValPtr ret;
     long carry;
-
-    if ((x == NULL) || (y == NULL))
-        return NULL;
-
-    ret = exsltDateCreateDate(XS_DURATION);
-    if (ret == NULL)
-        return NULL;
 
     /* months */
     ret->value.dur.mon = x->value.dur.mon + y->value.dur.mon;
@@ -1648,6 +1696,16 @@ _exsltDateAddDuration (exsltDateValPtr x, exsltDateValPtr y)
     carry = (long)FQUOTIENT(ret->value.dur.sec, SECS_PER_DAY);
     if (ret->value.dur.sec != 0.0) {
         ret->value.dur.sec = MODULO(ret->value.dur.sec, SECS_PER_DAY);
+	/*
+	 * Our function MODULO always gives us a positive value, so
+	 * if we end up with a "-ve" carry we need to adjust it
+	 * appropriately (bug 154021)
+	 */
+	if ((carry < 0) && (ret->value.dur.sec != 0)) {
+	    /* change seconds to equiv negative modulus */
+	    ret->value.dur.sec = ret->value.dur.sec - SECS_PER_DAY;
+	    carry++;
+	}
     }
 
     /* days */
@@ -1661,11 +1719,37 @@ _exsltDateAddDuration (exsltDateValPtr x, exsltDateValPtr y)
          (ret->value.dur.mon < 0)) ||
         (((ret->value.dur.day < 0) || (ret->value.dur.sec < 0)) &&
          (ret->value.dur.mon > 0))) {
-	exsltDateFreeDate(ret);
-        return NULL;
+        return 0;
     }
+    return 1;
+}
 
-    return ret;
+/**
+ * _exsltDateAddDuration:
+ * @x: an #exsltDateValPtr of type #XS_DURATION
+ * @y: an #exsltDateValPtr of type #XS_DURATION
+ *
+ * Compute a new duration from @x and @y.
+ *
+ * Returns date/time pointer or NULL.
+ */
+static exsltDateValPtr
+_exsltDateAddDuration (exsltDateValPtr x, exsltDateValPtr y)
+{
+    exsltDateValPtr ret;
+
+    if ((x == NULL) || (y == NULL))
+        return NULL;
+
+    ret = exsltDateCreateDate(XS_DURATION);
+    if (ret == NULL)
+        return NULL;
+
+    if (_exsltDateAddDurCalc(ret, x, y))
+        return ret;
+
+    exsltDateFreeDate(ret);
+    return NULL;
 }
 
 /****************************************************************
@@ -1683,7 +1767,8 @@ _exsltDateAddDuration (exsltDateValPtr x, exsltDateValPtr y)
  * Returns the current date and time as a date/time string.
  */
 static xmlChar *
-exsltDateDateTime (void) {
+exsltDateDateTime (void)
+{
     xmlChar *ret = NULL;
 #ifdef WITH_TIME
     exsltDateValPtr cur;
@@ -1715,7 +1800,8 @@ exsltDateDateTime (void) {
  * formats, returns NULL.
  */
 static xmlChar *
-exsltDateDate (const xmlChar *dateTime) {
+exsltDateDate (const xmlChar *dateTime)
+{
     exsltDateValPtr dt = NULL;
     xmlChar *ret = NULL;
 
@@ -1758,7 +1844,8 @@ exsltDateDate (const xmlChar *dateTime) {
  * formats, returns NULL.
  */
 static xmlChar *
-exsltDateTime (const xmlChar *dateTime) {
+exsltDateTime (const xmlChar *dateTime)
+{
     exsltDateValPtr dt = NULL;
     xmlChar *ret = NULL;
 
@@ -1805,7 +1892,8 @@ exsltDateTime (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateYear (const xmlChar *dateTime) {
+exsltDateYear (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -1853,7 +1941,8 @@ exsltDateYear (const xmlChar *dateTime) {
  * returned.
  */
 static xmlXPathObjectPtr
-exsltDateLeapYear (const xmlChar *dateTime) {
+exsltDateLeapYear (const xmlChar *dateTime)
+{
     double year;
 
     year = exsltDateYear(dateTime);
@@ -1888,7 +1977,8 @@ exsltDateLeapYear (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateMonthInYear (const xmlChar *dateTime) {
+exsltDateMonthInYear (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -1940,7 +2030,8 @@ exsltDateMonthInYear (const xmlChar *dateTime) {
  * 'October', 'November' or 'December'.
  */
 static const xmlChar *
-exsltDateMonthName (const xmlChar *dateTime) {
+exsltDateMonthName (const xmlChar *dateTime)
+{
     static const xmlChar monthNames[13][10] = {
         { 0 },
 	{ 'J', 'a', 'n', 'u', 'a', 'r', 'y', 0 },
@@ -1987,7 +2078,8 @@ exsltDateMonthName (const xmlChar *dateTime) {
  * 'Dec'.
  */
 static const xmlChar *
-exsltDateMonthAbbreviation (const xmlChar *dateTime) {
+exsltDateMonthAbbreviation (const xmlChar *dateTime)
+{
     static const xmlChar monthAbbreviations[13][4] = {
         { 0 },
 	{ 'J', 'a', 'n', 0 },
@@ -2032,7 +2124,8 @@ exsltDateMonthAbbreviation (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateWeekInYear (const xmlChar *dateTime) {
+exsltDateWeekInYear (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     long fdiy, fdiw, ret;
 
@@ -2060,8 +2153,8 @@ exsltDateWeekInYear (const xmlChar *dateTime) {
      */
     fdiw = (_exsltDateDayInWeek(fdiy, dt->value.date.year) + 6) % 7;
 
-    ret = DAY_IN_YEAR(dt->value.date.day, dt->value.date.mon,
-                      dt->value.date.year) / 7;
+    ret = (DAY_IN_YEAR(dt->value.date.day, dt->value.date.mon,
+                      dt->value.date.year) + fdiw) / 7;
 
     /* ISO 8601 adjustment, 3 is Thu */
     if (fdiw <= 3)
@@ -2094,7 +2187,8 @@ exsltDateWeekInYear (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateWeekInMonth (const xmlChar *dateTime) {
+exsltDateWeekInMonth (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     long fdiy, fdiw, ret;
 
@@ -2121,7 +2215,7 @@ exsltDateWeekInMonth (const xmlChar *dateTime) {
      */
     fdiw = (_exsltDateDayInWeek(fdiy, dt->value.date.year) + 6) % 7;
 
-    ret = ((dt->value.date.day + fdiw) / 7) + 1;
+    ret = ((dt->value.date.day + fdiw - 1) / 7) + 1;
 
     exsltDateFreeDate(dt);
 
@@ -2147,7 +2241,8 @@ exsltDateWeekInMonth (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateDayInYear (const xmlChar *dateTime) {
+exsltDateDayInYear (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     long ret;
 
@@ -2196,7 +2291,8 @@ exsltDateDayInYear (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateDayInMonth (const xmlChar *dateTime) {
+exsltDateDayInMonth (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -2243,7 +2339,8 @@ exsltDateDayInMonth (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateDayOfWeekInMonth (const xmlChar *dateTime) {
+exsltDateDayOfWeekInMonth (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     long ret;
 
@@ -2263,7 +2360,7 @@ exsltDateDayOfWeekInMonth (const xmlChar *dateTime) {
 	}
     }
 
-    ret = (dt->value.date.day / 7) + 1;
+    ret = ((dt->value.date.day -1) / 7) + 1;
 
     exsltDateFreeDate(dt);
 
@@ -2291,7 +2388,8 @@ exsltDateDayOfWeekInMonth (const xmlChar *dateTime) {
  * Monday and so on up to 7 for Saturday.
  */
 static double
-exsltDateDayInWeek (const xmlChar *dateTime) {
+exsltDateDayInWeek (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     long diy, ret;
 
@@ -2342,7 +2440,8 @@ exsltDateDayInWeek (const xmlChar *dateTime) {
  * 'Tuesday', 'Wednesday', 'Thursday' or 'Friday'.
  */
 static const xmlChar *
-exsltDateDayName (const xmlChar *dateTime) {
+exsltDateDayName (const xmlChar *dateTime)
+{
     static const xmlChar dayNames[8][10] = {
         { 0 },
 	{ 'S', 'u', 'n', 'd', 'a', 'y', 0 },
@@ -2381,7 +2480,8 @@ exsltDateDayName (const xmlChar *dateTime) {
  * 'Sun', 'Mon', 'Tue', 'Wed', 'Thu' or 'Fri'.
  */
 static const xmlChar *
-exsltDateDayAbbreviation (const xmlChar *dateTime) {
+exsltDateDayAbbreviation (const xmlChar *dateTime)
+{
     static const xmlChar dayAbbreviations[8][4] = {
         { 0 },
 	{ 'S', 'u', 'n', 0 },
@@ -2418,7 +2518,8 @@ exsltDateDayAbbreviation (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateHourInDay (const xmlChar *dateTime) {
+exsltDateHourInDay (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -2463,7 +2564,8 @@ exsltDateHourInDay (const xmlChar *dateTime) {
  * returned.
  */
 static double
-exsltDateMinuteInHour (const xmlChar *dateTime) {
+exsltDateMinuteInHour (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -2510,7 +2612,8 @@ exsltDateMinuteInHour (const xmlChar *dateTime) {
  * Returns the second or NaN.
  */
 static double
-exsltDateSecondInMinute (const xmlChar *dateTime) {
+exsltDateSecondInMinute (const xmlChar *dateTime)
+{
     exsltDateValPtr dt;
     double ret;
 
@@ -2649,6 +2752,107 @@ exsltDateAddDuration (const xmlChar *xstr, const xmlChar *ystr)
     exsltDateFreeDate(res);
 
     return ret;
+}
+
+/**
+ * exsltDateSumFunction:
+ * @ns:      a node set of duration strings
+ *
+ * The date:sum function adds a set of durations together. 
+ * The string values of the nodes in the node set passed as an argument 
+ * are interpreted as durations and added together as if using the 
+ * date:add-duration function. (from exslt.org)
+ *
+ * The return value is a string in the format defined for xs:duration
+ * in [3.2.6 duration] of [XML Schema Part 2: Datatypes]. 
+ * The durations can usually be added by summing the numbers given for
+ * each of the components in the durations. However, if the durations
+ * are differently signed, then this sometimes results in durations
+ * that are impossible to express in this syntax (e.g. 'P1M' + '-P1D').
+ * In these cases, the function returns an empty string (''). 
+ *
+ * Returns duration string or NULL.
+ */
+static void
+exsltDateSumFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
+    xmlNodeSetPtr ns;
+    void *user = NULL;
+    xmlChar *tmp;
+    exsltDateValPtr x, total;
+    xmlChar *ret;
+    int i;
+
+    if (nargs != 1) {
+	xmlXPathSetArityError (ctxt);
+	return;
+    }
+
+    /* We need to delay the freeing of value->user */
+    if ((ctxt->value != NULL) && ctxt->value->boolval != 0) {
+	user = ctxt->value->user;
+	ctxt->value->boolval = 0;
+	ctxt->value->user = NULL;
+    }
+
+    ns = xmlXPathPopNodeSet (ctxt);
+    if (xmlXPathCheckError (ctxt))
+	return;
+
+    if ((ns == NULL) || (ns->nodeNr == 0)) {
+	xmlXPathReturnEmptyString (ctxt);
+	if (ns != NULL)
+	    xmlXPathFreeNodeSet (ns);
+	return;
+    }
+
+    total = exsltDateCreateDate (XS_DURATION);
+    if (total == NULL) {
+        xmlXPathFreeNodeSet (ns);
+        return;
+    }
+
+    for (i = 0; i < ns->nodeNr; i++) {
+    	int result;
+	tmp = xmlXPathCastNodeToString (ns->nodeTab[i]);
+	if (tmp == NULL) {
+	    xmlXPathFreeNodeSet (ns);
+	    exsltDateFreeDate (total);
+	    return;
+	}
+
+	x = exsltDateParseDuration (tmp);
+	if (x == NULL) {
+	    xmlFree (tmp);
+	    exsltDateFreeDate (total);
+	    xmlXPathFreeNodeSet (ns);
+	    xmlXPathReturnEmptyString (ctxt);
+	    return;
+	}
+
+	result = _exsltDateAddDurCalc(total, total, x);
+
+	exsltDateFreeDate (x);
+	xmlFree (tmp);
+	if (!result) {
+	    exsltDateFreeDate (total);
+	    xmlXPathFreeNodeSet (ns);
+	    xmlXPathReturnEmptyString (ctxt);
+	    return;
+	}
+    }
+
+    ret = exsltDateFormatDuration (&(total->value.dur));
+    exsltDateFreeDate (total);
+
+    xmlXPathFreeNodeSet (ns);
+    if (user != NULL)
+	xmlFreeNodeList ((xmlNodePtr) user);
+
+    if (ret == NULL)
+	xmlXPathReturnEmptyString (ctxt);
+    else
+	xmlXPathReturnString (ctxt, ret);
 }
 
 /**
@@ -2879,7 +3083,10 @@ exsltDateDateTimeFunction (xmlXPathParserContextPtr ctxt, int nargs)
     }
 
     ret = exsltDateDateTime();
-    xmlXPathReturnString(ctxt, ret);
+    if (ret == NULL)
+        xmlXPathReturnEmptyString(ctxt);
+    else
+        xmlXPathReturnString(ctxt, ret);
 }
 #endif
 
@@ -2891,7 +3098,8 @@ exsltDateDateTimeFunction (xmlXPathParserContextPtr ctxt, int nargs)
  * Wraps exsltDateDate() for use by the XPath engine.
  */
 static void
-exsltDateDateFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateDateFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret, *dt = NULL;
 
     if ((nargs < 0) || (nargs > 1)) {
@@ -2929,7 +3137,8 @@ exsltDateDateFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateTime() for use by the XPath engine.
  */
 static void
-exsltDateTimeFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateTimeFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret, *dt = NULL;
 
     if ((nargs < 0) || (nargs > 1)) {
@@ -2967,7 +3176,8 @@ exsltDateTimeFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateYear() for use by the XPath engine.
  */
 static void
-exsltDateYearFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateYearFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *dt = NULL;
     double ret;
 
@@ -3000,7 +3210,8 @@ exsltDateYearFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateLeapYear() for use by the XPath engine.
  */
 static void
-exsltDateLeapYearFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateLeapYearFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *dt = NULL;
     xmlXPathObjectPtr ret;
 
@@ -3070,7 +3281,8 @@ X_IN_Y(Month,Year)
  * Wraps exsltDateMonthName() for use by the XPath engine.
  */
 static void
-exsltDateMonthNameFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateMonthNameFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *dt = NULL;
     const xmlChar *ret;
 
@@ -3197,7 +3409,8 @@ X_IN_Y(Day,Week)
  * Wraps exsltDateDayName() for use by the XPath engine.
  */
 static void
-exsltDateDayNameFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateDayNameFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *dt = NULL;
     const xmlChar *ret;
 
@@ -3233,7 +3446,8 @@ exsltDateDayNameFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateDayAbbreviation() for use by the XPath engine.
  */
 static void
-exsltDateDayAbbreviationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateDayAbbreviationFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *dt = NULL;
     const xmlChar *ret;
 
@@ -3297,7 +3511,8 @@ X_IN_Y(Second,Minute)
  * Wraps exsltDateSeconds() for use by the XPath engine.
  */
 static void
-exsltDateSecondsFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateSecondsFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *str = NULL;
     double   ret;
 
@@ -3329,7 +3544,8 @@ exsltDateSecondsFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateAdd() for use by the XPath processor.
  */
 static void
-exsltDateAddFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateAddFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret, *xstr, *ystr;
 
     if (nargs != 2) {
@@ -3351,7 +3567,10 @@ exsltDateAddFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     xmlFree(ystr);
     xmlFree(xstr);
 
-    xmlXPathReturnString(ctxt, ret);
+    if (ret == NULL)
+        xmlXPathReturnEmptyString(ctxt);
+    else
+	xmlXPathReturnString(ctxt, ret);
 }
 
 /**
@@ -3362,7 +3581,8 @@ exsltDateAddFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateAddDuration() for use by the XPath processor.
  */
 static void
-exsltDateAddDurationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateAddDurationFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret, *xstr, *ystr;
 
     if (nargs != 2) {
@@ -3384,7 +3604,10 @@ exsltDateAddDurationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     xmlFree(ystr);
     xmlFree(xstr);
 
-    xmlXPathReturnString(ctxt, ret);
+    if (ret == NULL)
+        xmlXPathReturnEmptyString(ctxt);
+    else
+	xmlXPathReturnString(ctxt, ret);
 }
 
 /**
@@ -3395,7 +3618,8 @@ exsltDateAddDurationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateDifference() for use by the XPath processor.
  */
 static void
-exsltDateDifferenceFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateDifferenceFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret, *xstr, *ystr;
 
     if (nargs != 2) {
@@ -3417,7 +3641,10 @@ exsltDateDifferenceFunction (xmlXPathParserContextPtr ctxt, int nargs) {
     xmlFree(ystr);
     xmlFree(xstr);
 
-    xmlXPathReturnString(ctxt, ret);
+    if (ret == NULL)
+        xmlXPathReturnEmptyString(ctxt);
+    else
+	xmlXPathReturnString(ctxt, ret);
 }
 
 /**
@@ -3428,7 +3655,8 @@ exsltDateDifferenceFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Wraps exsltDateDuration() for use by the XPath engine
  */
 static void
-exsltDateDurationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+exsltDateDurationFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
     xmlChar *ret;
     xmlChar *number = NULL;
 
@@ -3462,80 +3690,83 @@ exsltDateDurationFunction (xmlXPathParserContextPtr ctxt, int nargs) {
  * Registers the EXSLT - Dates and Times module
  */
 void
-exsltDateRegister(void)
+exsltDateRegister (void)
 {
+    xsltRegisterExtModuleFunction ((const xmlChar *) "add",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateAddFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "add-duration",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateAddDurationFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "date",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDateFunction);
 #ifdef WITH_TIME
-    xsltRegisterExtModuleFunction((const xmlChar *) "date-time",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateDateTimeFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "date-time",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDateTimeFunction);
 #endif
-    xsltRegisterExtModuleFunction((const xmlChar *) "date",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateDateFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "time",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateTimeFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "year",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateYearFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "leap-year",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateLeapYearFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "month-in-year",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateMonthInYearFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "month-name",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateMonthNameFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "month-abbreviation",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateMonthAbbreviationFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "week-in-year",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateWeekInYearFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "week-in-month",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateWeekInMonthFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-in-year",
-			  (const xmlChar *) EXSLT_DATE_NAMESPACE,
-			  exsltDateDayInYearFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-in-month",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDayInMonthFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-of-week-in-month",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDayOfWeekInMonthFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-in-week",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDayInWeekFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-name",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDayNameFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "day-abbreviation",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDayAbbreviationFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "hour-in-day",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateHourInDayFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "minute-in-hour",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateMinuteInHourFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "second-in-minute",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateSecondInMinuteFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "seconds",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateSecondsFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "add",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateAddFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "add-duration",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateAddDurationFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "difference",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDifferenceFunction);
-    xsltRegisterExtModuleFunction((const xmlChar *) "duration",
-                            (const xmlChar *) EXSLT_DATE_NAMESPACE,
-                            exsltDateDurationFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-abbreviation",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayAbbreviationFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-in-month",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayInMonthFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-in-week",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayInWeekFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-in-year",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayInYearFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-name",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayNameFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "day-of-week-in-month",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDayOfWeekInMonthFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "difference",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDifferenceFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "duration",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateDurationFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "hour-in-day",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateHourInDayFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "leap-year",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateLeapYearFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "minute-in-hour",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateMinuteInHourFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "month-abbreviation",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateMonthAbbreviationFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "month-in-year",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateMonthInYearFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "month-name",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateMonthNameFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "second-in-minute",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateSecondInMinuteFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "seconds",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateSecondsFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "sum",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateSumFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "time",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateTimeFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "week-in-month",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateWeekInMonthFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "week-in-year",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateWeekInYearFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "year",
+				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+				   exsltDateYearFunction);
 }

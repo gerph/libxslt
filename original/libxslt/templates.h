@@ -27,14 +27,14 @@ XSLTPUBFUN int XSLTCALL
 						 int nsNr);
 XSLTPUBFUN xmlChar * XSLTCALL	
 		xsltEvalTemplateString		(xsltTransformContextPtr ctxt,
-						 xmlNodePtr node,
-						 xmlNodePtr parent);
+						 xmlNodePtr contextNode,
+						 xmlNodePtr inst);
 XSLTPUBFUN xmlChar * XSLTCALL	
 		xsltEvalAttrValueTemplate	(xsltTransformContextPtr ctxt,
 						 xmlNodePtr node,
 						 const xmlChar *name,
 						 const xmlChar *ns);
-XSLTPUBFUN xmlChar * XSLTCALL	
+XSLTPUBFUN const xmlChar * XSLTCALL	
 		xsltEvalStaticAttrValueTemplate	(xsltStylesheetPtr style,
 						 xmlNodePtr node,
 						 const xmlChar *name,
