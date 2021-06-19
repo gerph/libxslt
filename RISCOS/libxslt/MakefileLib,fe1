@@ -39,6 +39,7 @@ EXPORTS    = ${EXP_LIB}.${COMPONENT}.h.attributes \
 			 ${EXP_LIB}.${COMPONENT}.h.xsltInternals \
 			 ${EXP_LIB}.${COMPONENT}.h.xsltconfig \
 			 ${EXP_LIB}.${COMPONENT}.h.xsltexports \
+			 ${EXP_LIB}.${COMPONENT}.h.xsltlocale \
 			 ${EXP_LIB}.${COMPONENT}.h.xsltutils \
 
 NO_EXPORT =  \
@@ -71,6 +72,7 @@ OBJS       = o.attributes \
 			 o.transform \
 			 o.variables \
 			 o.xslt \
+			 o.xsltlocale \
 			 o.xsltutils \
 
 
@@ -127,6 +129,8 @@ ${EXP_LIB}.${COMPONENT}.h.xsltInternals: h.xsltInternals
 ${EXP_LIB}.${COMPONENT}.h.xsltconfig: h.xsltconfig
 		${CP} $? $@ ${CPFLAGS}
 ${EXP_LIB}.${COMPONENT}.h.xsltexports: h.xsltexports
+		${CP} $? $@ ${CPFLAGS}
+${EXP_LIB}.${COMPONENT}.h.xsltlocale: h.xsltlocale
 		${CP} $? $@ ${CPFLAGS}
 ${EXP_LIB}.${COMPONENT}.h.xsltutils: h.xsltutils
 		${CP} $? $@ ${CPFLAGS}

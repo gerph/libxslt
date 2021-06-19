@@ -21,6 +21,7 @@
 #include <libxml/xmlstring.h>
 #include <libxslt/xslt.h>
 #include "xsltexports.h"
+#include "xsltlocale.h"
 #include "numbersInternals.h"
 
 #ifdef __cplusplus
@@ -60,6 +61,7 @@ extern "C" {
  * XSLT_REFACTORED_KEYCOMP:
  *
  * Internal define to enable on-demand xsl:key computation.
+ * That's the only mode now but the define is kept for compatibility
  */
 #define XSLT_REFACTORED_KEYCOMP
 
@@ -104,7 +106,7 @@ extern const xmlChar *xsltXSLTAttrMarker;
 /* #define XSLT_REFACTORED_XSLT_NSCOMP */
 
 /**
- * XSLT_REFACTORED_XPATHCOMP
+ * XSLT_REFACTORED_XPATHCOMP:
  *
  * Internal define to enable the optimization of the
  * compilation of XPath expressions.
@@ -133,19 +135,39 @@ extern const xmlChar *xsltConstNamespaceNameXSLT;
     (((a) != NULL) && ((a)->ns != NULL) && \
     ((a)->ns->href == xsltConstNamespaceNameXSLT))
 
+/**
+ * XSLT_HAS_INTERNAL_NSMAP:
+ *
+ * check for namespace mapping
+ */
 #define XSLT_HAS_INTERNAL_NSMAP(s) \
     (((s) != NULL) && ((s)->principal) && \
      ((s)->principal->principalData) && \
      ((s)->principal->principalData->nsMap))
 
+/**
+ * XSLT_GET_INTERNAL_NSMAP:
+ *
+ * get pointer to namespace map
+ */
 #define XSLT_GET_INTERNAL_NSMAP(s) ((s)->principal->principalData->nsMap)
 
 #else /* XSLT_REFACTORED_XSLT_NSCOMP */
 
+/**
+ * IS_XSLT_ELEM_FAST:
+ *
+ * quick check whether this is an xslt element
+ */
 #define IS_XSLT_ELEM_FAST(n) \
     (((n) != NULL) && ((n)->ns != NULL) && \
      (xmlStrEqual((n)->ns->href, XSLT_NAMESPACE)))
 
+/**
+ * IS_XSLT_ATTR_FAST:
+ *
+ * quick check for xslt namespace attribute
+ */
 #define IS_XSLT_ATTR_FAST(a) \
     (((a) != NULL) && ((a)->ns != NULL) && \
      (xmlStrEqual((a)->ns->href, XSLT_NAMESPACE)))
@@ -1024,6 +1046,7 @@ struct _xsltStyleItemSort {
     int      descending;	/* sort */
     const xmlChar *lang;	/* sort */
     int      has_lang;		/* sort */
+    xsltLocale locale;		/* sort */
     const xmlChar *case_order;	/* sort */
     int      lower_first;	/* sort */
 
@@ -1225,10 +1248,6 @@ struct _xsltVarInfo {
     const xmlChar *nsName;
 };
 
-#define XSLT_ELEMENT_CATEGORY_XSLT 0
-#define XSLT_ELEMENT_CATEGORY_EXTENSION 1
-#define XSLT_ELEMENT_CATEGORY_LRE 2
-
 /**
  * xsltCompilerNodeInfo:
  *
@@ -1273,6 +1292,11 @@ struct _xsltCompilerNodeInfo {
     xsltStyleType curChildType;    
 };
 
+/**
+ * XSLT_CCTXT:
+ *
+ * get pointer to compiler context
+ */
 #define XSLT_CCTXT(style) ((xsltCompilerCtxtPtr) style->compCtxt) 
 
 typedef enum {
@@ -1355,6 +1379,7 @@ struct _xsltStylePreComp {
     int      descending;	/* sort */
     const xmlChar *lang;	/* sort */
     int      has_lang;		/* sort */
+    xsltLocale locale;		/* sort */
     const xmlChar *case_order;	/* sort */
     int      lower_first;	/* sort */
 
@@ -1391,9 +1416,6 @@ struct _xsltStylePreComp {
 #endif /* XSLT_REFACTORED */
 
 
-#define XSLT_VAR_GLOBAL 1<<0
-#define XSLT_VAR_IN_SELECT 1<<1
-#define XSLT_TCTXT_VARIABLE(c) ((xsltStackElemPtr) (c)->contextVariable)
 /*
  * The in-memory structure corresponding to an XSLT Variable
  * or Param.
@@ -1732,7 +1754,7 @@ struct _xsltTransformContext {
     int parserOptions;			/* parser options xmlParserOption */
 
     /*
-     * dictionnary: shared between stylesheet, context and documents.
+     * dictionary: shared between stylesheet, context and documents.
      */
     xmlDictPtr dict;
     xmlDocPtr		tmpDoc; /* Obsolete; not used in the library. */
@@ -1741,8 +1763,8 @@ struct _xsltTransformContext {
      */
     int internalized;
     int nbKeys;
-    int hasTemplKeyPatterns;    
-    xsltTemplatePtr currentTemplateRule; /* the Current Template Rule */    
+    int hasTemplKeyPatterns;
+    xsltTemplatePtr currentTemplateRule; /* the Current Template Rule */
     xmlNodePtr initialContextNode;
     xmlDocPtr initialContextDoc;
     xsltTransformCachePtr cache;
@@ -1750,7 +1772,9 @@ struct _xsltTransformContext {
     xmlDocPtr localRVT; /* list of local tree fragments; will be freed when
 			   the instruction which created the fragment
                            exits */
-    xmlDocPtr localRVTBase;    
+    xmlDocPtr localRVTBase;
+    int keyInitLevel;   /* Needed to catch recursive keys issues */
+    int funcLevel;      /* Needed to catch recursive functions issues */
 };
 
 /**
@@ -1933,7 +1957,8 @@ XSLTPUBFUN int XSLTCALL
 			xsltInitCtxtKey		(xsltTransformContextPtr ctxt,
 						 xsltDocumentPtr doc,
 						 xsltKeyDefPtr keyd);
-
+XSLTPUBFUN int XSLTCALL
+			xsltInitAllDocKeys	(xsltTransformContextPtr ctxt);
 #ifdef __cplusplus
 }
 #endif

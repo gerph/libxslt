@@ -133,10 +133,11 @@ xsltDocumentFunctionLoadDocument(xmlXPathParserContextPtr ctxt, xmlChar* URI)
      */
     fragment = (xmlChar *)uri->fragment;
     if (fragment != NULL) {
+        xmlChar *newURI;
 	uri->fragment = NULL;
-	URI = xmlSaveUri(uri);
-	idoc = xsltLoadDocument(tctxt, URI);
-	xmlFree(URI);
+	newURI = xmlSaveUri(uri);
+	idoc = xsltLoadDocument(tctxt, newURI);
+	xmlFree(newURI);
     } else
 	idoc = xsltLoadDocument(tctxt, URI);
     xmlFreeURI(uri);
@@ -144,7 +145,8 @@ xsltDocumentFunctionLoadDocument(xmlXPathParserContextPtr ctxt, xmlChar* URI)
     if (idoc == NULL) {
 	if ((URI == NULL) ||
 	    (URI[0] == '#') ||
-	    (xmlStrEqual(tctxt->style->doc->URL, URI))) 
+	    ((tctxt->style->doc != NULL) &&
+	    (xmlStrEqual(tctxt->style->doc->URL, URI)))) 
 	{
 	    /*
 	    * This selects the stylesheet's doc itself.
@@ -811,6 +813,7 @@ xsltElementAvailableFunction(xmlXPathParserContextPtr ctxt, int nargs){
 	ctxt->error = XPATH_INVALID_ARITY;
 	return;
     }
+    xmlXPathStringFunction(ctxt, 1);
     if ((ctxt->value == NULL) || (ctxt->value->type != XPATH_STRING)) {
 	xsltTransformError(xsltXPathGetTransformContext(ctxt), NULL, NULL,
 	    "element-available() : invalid arg expecting a string\n");
@@ -876,6 +879,7 @@ xsltFunctionAvailableFunction(xmlXPathParserContextPtr ctxt, int nargs){
 	ctxt->error = XPATH_INVALID_ARITY;
 	return;
     }
+    xmlXPathStringFunction(ctxt, 1);
     if ((ctxt->value == NULL) || (ctxt->value->type != XPATH_STRING)) {
 	xsltTransformError(xsltXPathGetTransformContext(ctxt), NULL, NULL,
 	    "function-available() : invalid arg expecting a string\n");

@@ -29,7 +29,9 @@
 #endif
 
 #if HAVE_LOCALTIME_R	/* _POSIX_SOURCE required by gnu libc */
+#ifndef _AIX51		/* but on AIX we're not using gnu libc */
 #define _POSIX_SOURCE
+#endif
 #endif
 
 #include <libxml/tree.h>
@@ -744,14 +746,9 @@ exsltDateFreeDate (exsltDateValPtr date) {
 static exsltDateValPtr
 exsltDateCurrent (void)
 {
-    struct tm *localTm, *gmTm;
-    time_t secs, gsecs;
-#if HAVE_LOCALTIME_R
-    struct tm localTmS;
-#endif
-#if HAVE_GMTIME_R
-    struct tm gmTmS;
-#endif
+    struct tm localTm, gmTm;
+    time_t secs;
+    int local_s, gm_s;
     exsltDateValPtr ret;
 
     ret = exsltDateCreateDate(XS_DATETIME);
@@ -761,41 +758,60 @@ exsltDateCurrent (void)
     /* get current time */
     secs    = time(NULL);
 #if HAVE_LOCALTIME_R
-    localtime_r(&secs, &localTmS);
-    localTm = &localTmS;
+    localtime_r(&secs, &localTm);
 #else
-    localTm = localtime(&secs);
+    localTm = *localtime(&secs);
 #endif
 
     /* get real year, not years since 1900 */
-    ret->value.date.year = localTm->tm_year + 1900;
+    ret->value.date.year = localTm.tm_year + 1900;
 
-    ret->value.date.mon  = localTm->tm_mon + 1;
-    ret->value.date.day  = localTm->tm_mday;
-    ret->value.date.hour = localTm->tm_hour;
-    ret->value.date.min  = localTm->tm_min;
+    ret->value.date.mon  = localTm.tm_mon + 1;
+    ret->value.date.day  = localTm.tm_mday;
+    ret->value.date.hour = localTm.tm_hour;
+    ret->value.date.min  = localTm.tm_min;
 
     /* floating point seconds */
-    ret->value.date.sec  = (double) localTm->tm_sec;
+    ret->value.date.sec  = (double) localTm.tm_sec;
 
     /* determine the time zone offset from local to gm time */
 #if HAVE_GMTIME_R
-    gmtime_r(&secs, &gmTmS);
-    gmTm = &gmTmS;
+    gmtime_r(&secs, &gmTm);
 #else
-    gmTm = gmtime(&secs);
+    gmTm = *gmtime(&secs);
 #endif
     ret->value.date.tz_flag = 0;
 #if 0
     ret->value.date.tzo = (((ret->value.date.day * 1440) +
                             (ret->value.date.hour * 60) +
                              ret->value.date.min) -
-                           ((gmTm->tm_mday * 1440) + (gmTm->tm_hour * 60) +
-                             gmTm->tm_min));
+                           ((gmTm.tm_mday * 1440) + (gmTm.tm_hour * 60) +
+                             gmTm.tm_min));
 #endif
-    gsecs = mktime(gmTm);
-    ret->value.date.tzo = (secs - gsecs) / 60;
-
+    local_s = localTm.tm_hour * SECS_PER_HOUR +
+        localTm.tm_min * SECS_PER_MIN +
+        localTm.tm_sec;
+    
+    gm_s = gmTm.tm_hour * SECS_PER_HOUR +
+        gmTm.tm_min * SECS_PER_MIN +
+        gmTm.tm_sec;
+    
+    if (localTm.tm_year < gmTm.tm_year) {
+ 	ret->value.date.tzo = -((SECS_PER_DAY - local_s) + gm_s)/60;
+    } else if (localTm.tm_year > gmTm.tm_year) {
+ 	ret->value.date.tzo = ((SECS_PER_DAY - gm_s) + local_s)/60;
+    } else if (localTm.tm_mon < gmTm.tm_mon) {
+ 	ret->value.date.tzo = -((SECS_PER_DAY - local_s) + gm_s)/60;
+    } else if (localTm.tm_mon > gmTm.tm_mon) {
+ 	ret->value.date.tzo = ((SECS_PER_DAY - gm_s) + local_s)/60;
+    } else if (localTm.tm_mday < gmTm.tm_mday) {
+ 	ret->value.date.tzo = -((SECS_PER_DAY - local_s) + gm_s)/60;
+    } else if (localTm.tm_mday > gmTm.tm_mday) {
+ 	ret->value.date.tzo = ((SECS_PER_DAY - gm_s) + local_s)/60;
+    } else  {
+ 	ret->value.date.tzo = (local_s - gm_s)/60;
+    }
+ 
     return ret;
 }
 #endif
@@ -2143,7 +2159,7 @@ static double
 exsltDateWeekInYear (const xmlChar *dateTime)
 {
     exsltDateValPtr dt;
-    long fdiy, fdiw, ret;
+    long diy, diw, year, ret;
 
     if (dateTime == NULL) {
 #ifdef WITH_TIME
@@ -2161,20 +2177,26 @@ exsltDateWeekInYear (const xmlChar *dateTime)
 	}
     }
 
-    fdiy = DAY_IN_YEAR(1, 1, dt->value.date.year);
-    
+    diy = DAY_IN_YEAR(dt->value.date.day, dt->value.date.mon,
+                      dt->value.date.year);
+
     /*
      * Determine day-in-week (0=Sun, 1=Mon, etc.) then adjust so Monday
      * is the first day-in-week
      */
-    fdiw = (_exsltDateDayInWeek(fdiy, dt->value.date.year) + 6) % 7;
-
-    ret = (DAY_IN_YEAR(dt->value.date.day, dt->value.date.mon,
-                      dt->value.date.year) + fdiw) / 7;
+    diw = (_exsltDateDayInWeek(diy, dt->value.date.year) + 6) % 7;
 
     /* ISO 8601 adjustment, 3 is Thu */
-    if (fdiw <= 3)
-	ret += 1;
+    diy += (3 - diw);
+    if(diy < 1) {
+	year = dt->value.date.year - 1;
+	if(year == 0) year--;
+	diy = DAY_IN_YEAR(31, 12, year) + diy;
+    } else if (diy > (long)DAY_IN_YEAR(31, 12, dt->value.date.year)) {
+	diy -= DAY_IN_YEAR(31, 12, dt->value.date.year);
+    }
+
+    ret = ((diy - 1) / 7) + 1;
 
     exsltDateFreeDate(dt);
 
@@ -3785,4 +3807,124 @@ exsltDateRegister (void)
     xsltRegisterExtModuleFunction ((const xmlChar *) "year",
 				   (const xmlChar *) EXSLT_DATE_NAMESPACE,
 				   exsltDateYearFunction);
+}
+
+/**
+ * exsltDateXpathCtxtRegister:
+ *
+ * Registers the EXSLT - Dates and Times module for use outside XSLT
+ */
+int
+exsltDateXpathCtxtRegister (xmlXPathContextPtr ctxt, const xmlChar *prefix)
+{
+    if (ctxt
+        && prefix
+        && !xmlXPathRegisterNs(ctxt,
+                               prefix,
+                               (const xmlChar *) EXSLT_DATE_NAMESPACE)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "add",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateAddFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "add-duration",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateAddDurationFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "date",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDateFunction)
+#ifdef WITH_TIME
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "date-time",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDateTimeFunction)
+#endif
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-abbreviation",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayAbbreviationFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-in-month",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayInMonthFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-in-week",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayInWeekFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-in-year",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayInYearFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-name",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayNameFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "day-of-week-in-month",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDayOfWeekInMonthFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "difference",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDifferenceFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "duration",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateDurationFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "hour-in-day",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateHourInDayFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "leap-year",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateLeapYearFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "minute-in-hour",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateMinuteInHourFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "month-abbreviation",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateMonthAbbreviationFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "month-in-year",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateMonthInYearFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "month-name",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateMonthNameFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "second-in-minute",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateSecondInMinuteFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "seconds",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateSecondsFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "sum",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateSumFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "time",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateTimeFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "week-in-month",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateWeekInMonthFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "week-in-year",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateWeekInYearFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "year",
+                                   (const xmlChar *) EXSLT_DATE_NAMESPACE,
+                                   exsltDateYearFunction)) {
+        return 0;
+    }
+    return -1;
 }

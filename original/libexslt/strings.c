@@ -111,6 +111,11 @@ exsltStrTokenizeFunction(xmlXPathParserContextPtr ctxt, int nargs)
                 xmlAddChild((xmlNodePtr) container, node);
 	        xmlXPathNodeSetAddUnique(ret->nodesetval, node);
             }
+	    /*
+	     * Mark it as a function result in order to avoid garbage
+	     * collecting of tree fragments
+	     */
+	    xsltExtensionInstructionResultRegister(tctxt, ret);
         }
     }
 
@@ -217,6 +222,11 @@ exsltStrSplitFunction(xmlXPathParserContextPtr ctxt, int nargs) {
 		xmlAddChild((xmlNodePtr) container, node);
 		xmlXPathNodeSetAddUnique(ret->nodesetval, node);
 	    }
+	    /*
+	     * Mark it as a function result in order to avoid garbage
+	     * collecting of tree fragments
+	     */
+	    xsltExtensionInstructionResultRegister(tctxt, ret);
         }
     }
 
@@ -495,6 +505,142 @@ exsltStrConcatFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 }
 
 /**
+ * exsltStrReplaceInternal:
+ * @str: string to modify
+ * @searchStr: string to find
+ * @replaceStr: string to replace occurrences of searchStr
+ *
+ * Search and replace string function used by exsltStrReplaceFunction
+ */
+static xmlChar*
+exsltStrReplaceInternal(const xmlChar* str, const xmlChar* searchStr, 
+                        const xmlChar* replaceStr)
+{
+    const xmlChar *curr, *next;
+    xmlChar *ret = NULL;
+    int searchStrSize;
+
+    curr = str;
+    searchStrSize = xmlStrlen(searchStr);
+
+    do {
+      next = xmlStrstr(curr, searchStr);
+      if (next == NULL) {
+        ret = xmlStrcat (ret, curr);
+        break;
+      }
+
+      ret = xmlStrncat (ret, curr, next - curr);
+      ret = xmlStrcat (ret, replaceStr);
+      curr = next + searchStrSize;
+    } while (*curr != 0);
+
+    return ret;
+}
+/**
+ * exsltStrReplaceFunction:
+ * @ctxt: an XPath parser context
+ * @nargs: the number of arguments
+ *
+ * Takes a string, and two node sets and returns the string with all strings in 
+ * the first node set replaced by all strings in the second node set.
+ */
+static void
+exsltStrReplaceFunction (xmlXPathParserContextPtr ctxt, int nargs) {
+    xmlChar *str = NULL, *searchStr = NULL, *replaceStr = NULL;
+    xmlNodeSetPtr replaceSet = NULL, searchSet = NULL;
+    xmlChar *ret = NULL, *retSwap = NULL;
+    int i;
+
+    if (nargs  != 3) {
+      xmlXPathSetArityError(ctxt);
+      return;
+    }
+
+    /* pull out replace argument */
+    if (!xmlXPathStackIsNodeSet(ctxt)) {
+      replaceStr = xmlXPathPopString(ctxt);
+    }
+		else {
+      replaceSet = xmlXPathPopNodeSet(ctxt);
+      if (xmlXPathCheckError(ctxt)) {
+        xmlXPathSetTypeError(ctxt);
+        goto fail;
+      }
+    }
+
+    /* behavior driven by search argument from here on */
+    if (!xmlXPathStackIsNodeSet(ctxt)) {
+      searchStr = xmlXPathPopString(ctxt);
+      str = xmlXPathPopString(ctxt);
+
+      if (replaceStr == NULL) {
+        xmlXPathSetTypeError(ctxt);
+        goto fail;
+      }
+
+      ret = exsltStrReplaceInternal(str, searchStr, replaceStr);
+    }
+		else {
+      searchSet = xmlXPathPopNodeSet(ctxt);
+      if (searchSet == NULL || xmlXPathCheckError(ctxt)) {
+        xmlXPathSetTypeError(ctxt);
+        goto fail;
+      }
+
+      str = xmlXPathPopString(ctxt);
+      ret = xmlStrdup(str);
+
+      for (i = 0; i < searchSet->nodeNr; i++) {
+	searchStr = xmlXPathCastNodeToString(searchSet->nodeTab[i]);
+
+        if (replaceSet != NULL) {
+          replaceStr = NULL;
+          if (i < replaceSet->nodeNr) {
+            replaceStr = xmlXPathCastNodeToString(replaceSet->nodeTab[i]);
+          }
+
+          retSwap = exsltStrReplaceInternal(ret, searchStr, replaceStr);
+          
+          if (replaceStr != NULL) {
+            xmlFree(replaceStr);
+            replaceStr = NULL;
+          }
+        }
+        else {
+          retSwap = exsltStrReplaceInternal(ret, searchStr, replaceStr);
+        }
+
+				xmlFree(ret);
+        if (searchStr != NULL) {
+          xmlFree(searchStr);
+          searchStr = NULL;
+        }
+
+				ret = retSwap;
+			}
+
+      if (replaceSet != NULL)
+        xmlXPathFreeNodeSet(replaceSet);
+
+      if (searchSet != NULL)
+        xmlXPathFreeNodeSet(searchSet);
+		}
+
+    xmlXPathReturnString(ctxt, ret);
+
+ fail:
+    if (replaceStr != NULL)
+      xmlFree(replaceStr);
+
+    if (searchStr != NULL)
+      xmlFree(searchStr);
+
+    if (str != NULL)
+      xmlFree(str);
+}
+
+/**
  * exsltStrRegister:
  *
  * Registers the EXSLT - Strings module
@@ -523,4 +669,49 @@ exsltStrRegister (void) {
     xsltRegisterExtModuleFunction ((const xmlChar *) "concat",
 				   EXSLT_STRINGS_NAMESPACE,
 				   exsltStrConcatFunction);
+    xsltRegisterExtModuleFunction ((const xmlChar *) "replace",
+				   EXSLT_STRINGS_NAMESPACE,
+				   exsltStrReplaceFunction);
+}
+
+/**
+ * exsltStrXpathCtxtRegister:
+ *
+ * Registers the EXSLT - Strings module for use outside XSLT
+ */
+int
+exsltStrXpathCtxtRegister (xmlXPathContextPtr ctxt, const xmlChar *prefix)
+{
+    if (ctxt
+        && prefix
+        && !xmlXPathRegisterNs(ctxt,
+                               prefix,
+                               (const xmlChar *) EXSLT_STRINGS_NAMESPACE)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "encode-uri",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrEncodeUriFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "decode-uri",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrDecodeUriFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "padding",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrPaddingFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "align",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrAlignFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "concat",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrConcatFunction)
+        && !xmlXPathRegisterFuncNS(ctxt,
+                                   (const xmlChar *) "replace",
+                                   (const xmlChar *) EXSLT_STRINGS_NAMESPACE,
+                                   exsltStrReplaceFunction)) {
+        return 0;
+    }
+    return -1;
 }
