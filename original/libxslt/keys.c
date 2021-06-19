@@ -217,6 +217,63 @@ xsltFreeKeys(xsltStylesheetPtr style) {
 }
 
 /**
+ * skipString:
+ * @cur: the current pointer
+ * @end: the current offset
+ *
+ * skip a string delimited by " or '
+ *
+ * Returns the byte after the string or -1 in case of error
+ */
+static int
+skipString(const xmlChar *cur, int end) {
+    xmlChar limit;
+
+    if ((cur == NULL) || (end < 0)) return(-1);
+    if ((cur[end] == '\'') || (cur[end] == '"')) limit = cur[end];
+    else return(end);
+    end++;
+    while (cur[end] != 0) {
+        if (cur[end] == limit)
+	    return(end + 1);
+	end++;
+    }
+    return(-1);
+}
+
+/**
+ * skipPredicate:
+ * @cur: the current pointer
+ * @end: the current offset
+ *
+ * skip a predicate
+ *
+ * Returns the byte after the predicate or -1 in case of error
+ */
+static int
+skipPredicate(const xmlChar *cur, int end) {
+    if ((cur == NULL) || (end < 0)) return(-1);
+    if (cur[end] != '[') return(end);
+    end++;
+    while (cur[end] != 0) {
+        if ((cur[end] == '\'') || (cur[end] == '"')) {
+	    end = skipString(cur, end);
+	    if (end <= 0)
+	        return(-1);
+	    continue;
+	} else if (cur[end] == '[') {
+	    end = skipPredicate(cur, end);
+	    if (end <= 0)
+	        return(-1);
+	    continue;
+	} else if (cur[end] == ']')
+	    return(end + 1);
+	end++;
+    }
+    return(-1);
+}
+
+/**
  * xsltAddKey:
  * @style: an XSLT stylesheet
  * @name:  the key name or NULL
@@ -256,15 +313,25 @@ xsltAddKey(xsltStylesheetPtr style, const xmlChar *name,
     current = end = 0;
     while (match[current] != 0) {
 	start = current;
-	while (IS_BLANK(match[current]))
+	while (IS_BLANK_CH(match[current]))
 	    current++;
 	end = current;
 	while ((match[end] != 0) && (match[end] != '|')) {
-	    end++;
+	    if (match[end] == '[') {
+	        end = skipPredicate(match, end);
+		if (end <= 0) {
+		    xsltTransformError(NULL, style, inst,
+		                       "key pattern is malformed: %s",
+				       key->match);
+		    if (style != NULL) style->errors++;
+		    goto error;
+		}
+	    } else
+		end++;
 	}
 	if (current == end) {
 	    xsltTransformError(NULL, style, inst,
-			     "key pattern is empty\n");
+			       "key pattern is empty\n");
 	    if (style != NULL) style->errors++;
 	    goto error;
 	}
@@ -493,21 +560,21 @@ xsltInitCtxtKey(xsltTransformContextPtr ctxt, xsltDocumentPtr doc,
 	    nodelist = res->nodesetval;
 #ifdef WITH_XSLT_DEBUG_KEYS
 	    if (nodelist != NULL)
-		xsltGenericDebug(xsltGenericDebugContext,
+		XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext,
 		     "xsltInitCtxtKey: %s evaluates to %d nodes\n",
-				 keyd->match, nodelist->nodeNr);
+				 keyd->match, nodelist->nodeNr));
 #endif
 	} else {
 #ifdef WITH_XSLT_DEBUG_KEYS
-	    xsltGenericDebug(xsltGenericDebugContext,
-		 "xsltInitCtxtKey: %s is not a node set\n", keyd->match);
+	    XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext,
+		 "xsltInitCtxtKey: %s is not a node set\n", keyd->match));
 #endif
 	    goto error;
 	}
     } else {
 #ifdef WITH_XSLT_DEBUG_KEYS
-	xsltGenericDebug(xsltGenericDebugContext,
-	     "xsltInitCtxtKey: %s evaluation failed\n", keyd->match);
+	XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext,
+	     "xsltInitCtxtKey: %s evaluation failed\n", keyd->match));
 #endif
 	ctxt->state = XSLT_STATE_STOPPED;
 	goto error;
@@ -555,9 +622,9 @@ xsltInitCtxtKey(xsltTransformContextPtr ctxt, xsltDocumentPtr doc,
 		str = list[index++];
 		while (str != NULL) {
 #ifdef WITH_XSLT_DEBUG_KEYS
-		    xsltGenericDebug(xsltGenericDebugContext,
+		    XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext,
 			 "xsl:key : node associated to(%s,%s)\n",
-				     keyd->name, str);
+				     keyd->name, str));
 #endif
 		    keylist = xmlHashLookup(table->keys, str);
 		    if (keylist == NULL) {
@@ -573,9 +640,9 @@ xsltInitCtxtKey(xsltTransformContextPtr ctxt, xsltDocumentPtr doc,
 		xmlFree(list);
 #ifdef WITH_XSLT_DEBUG_KEYS
 	    } else {
-		xsltGenericDebug(xsltGenericDebugContext,
+		XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext,
 		     "xsl:key : use %s failed to return strings\n",
-				 keyd->use);
+				 keyd->use));
 #endif
 	    }
 	}
@@ -607,8 +674,8 @@ xsltInitCtxtKeys(xsltTransformContextPtr ctxt, xsltDocumentPtr doc) {
 	return;
 #ifdef WITH_XSLT_DEBUG_KEYS
     if ((doc->doc != NULL) && (doc->doc->URL != NULL))
-	xsltGenericDebug(xsltGenericDebugContext, "Initializing keys on %s\n",
-		     doc->doc->URL);
+	XSLT_TRACE(ctxt,XSLT_TRACE_KEYS,xsltGenericDebug(xsltGenericDebugContext, "Initializing keys on %s\n",
+		     doc->doc->URL));
 #endif
     style = ctxt->style;
     while (style != NULL) {
