@@ -6,8 +6,8 @@
  * daniel@veillard.com
  */
 
-/* Justin's port version */
-#define PORTVERSION "1.35"
+/* Gerph's port version */
+#define PORTVERSION "1.36"
 
 #include "libxslt/libxslt.h"
 #include "libexslt/exslt.h"
