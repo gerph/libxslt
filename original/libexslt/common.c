@@ -1,7 +1,7 @@
 #define IN_LIBEXSLT
 #include "libexslt/libexslt.h"
 
-#if defined(WIN32) && !defined (__CYGWIN__) && (!__MINGW32__)
+#if defined(_WIN32) && !defined (__CYGWIN__) && (!__MINGW32__)
 #include <win32config.h>
 #else
 #include "config.h"
@@ -46,30 +46,24 @@ exsltNodeSetFunction (xmlXPathParserContextPtr ctxt, int nargs) {
 	if (fragment == NULL) {
 	    xsltTransformError(tctxt, NULL, tctxt->inst,
 		"exsltNodeSetFunction: Failed to create a tree fragment.\n");
-	    tctxt->state = XSLT_STATE_STOPPED; 
+	    tctxt->state = XSLT_STATE_STOPPED;
 	    return;
 	}
 	xsltRegisterLocalRVT(tctxt, fragment);
 
 	strval = xmlXPathPopString (ctxt);
-	
+
 	txt = xmlNewDocText (fragment, strval);
 	xmlAddChild((xmlNodePtr) fragment, txt);
-	obj = xmlXPathNewNodeSet(txt);	
+	obj = xmlXPathNewNodeSet(txt);
 	if (obj == NULL) {
 	    xsltTransformError(tctxt, NULL, tctxt->inst,
 		"exsltNodeSetFunction: Failed to create a node set object.\n");
 	    tctxt->state = XSLT_STATE_STOPPED;
-	} else {
-	    /*
-	     * Mark it as a function result in order to avoid garbage
-	     * collecting of tree fragments
-	     */
-	    xsltExtensionInstructionResultRegister(tctxt, obj);
 	}
 	if (strval != NULL)
 	    xmlFree (strval);
-	
+
 	valuePush (ctxt, obj);
     }
 }
@@ -132,6 +126,6 @@ exsltCommonRegister (void) {
 				  exsltObjectTypeFunction);
     xsltRegisterExtModuleElement((const xmlChar *) "document",
 				 EXSLT_COMMON_NAMESPACE,
-				 (xsltPreComputeFunction) xsltDocumentComp,
-				 (xsltTransformFunction) xsltDocumentElem);
+				 xsltDocumentComp,
+				 xsltDocumentElem);
 }
