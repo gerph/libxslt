@@ -12,8 +12,6 @@ Obey !~Diff
 cdir Src
 cdir Src.o
 cdir Src.aif
-cdir Src.breakpoint
-cdir Src.breakpoint.o
 cdir Src.libxslt
 cdir Src.libxslt.o
 cdir Src.libexslt
@@ -27,9 +25,6 @@ cdir XML.Help
 | 
 echo [Copy source]
 Alias CopySource Copy RISCOS.%%0 Src.%%0 ~C~VFR~D
-CopySource breakpoint.c
-CopySource breakpoint.h
-CopySource breakpoint.Makefile
 CopySource libexslt.c
 CopySource libexslt.h
 CopySource libexslt.Makefile

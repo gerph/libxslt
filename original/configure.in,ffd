@@ -5,13 +5,13 @@ dnl libxslt is the main part of the package
 dnl libexslt is an extension
 dnl
 LIBXSLT_MAJOR_VERSION=1
-LIBXSLT_MINOR_VERSION=0
-LIBXSLT_MICRO_VERSION=33
+LIBXSLT_MINOR_VERSION=1
+LIBXSLT_MICRO_VERSION=0
 PACKAGE=libxslt
 LIBEXSLT_MAJOR_VERSION=0
-LIBEXSLT_MINOR_VERSION=7
-LIBEXSLT_MICRO_VERSION=22
-LIBXML_REQUIRED_VERSION=2.5.6
+LIBEXSLT_MINOR_VERSION=8
+LIBEXSLT_MICRO_VERSION=0
+LIBXML_REQUIRED_VERSION=2.6.0
 
 
 LIBXSLT_VERSION=$LIBXSLT_MAJOR_VERSION.$LIBXSLT_MINOR_VERSION.$LIBXSLT_MICRO_VERSION
@@ -41,31 +41,6 @@ AC_SUBST(LIBEXSLT_MICRO_VERSION)
 AC_SUBST(LIBEXSLT_VERSION)
 AC_SUBST(LIBEXSLT_VERSION_INFO)
 AC_SUBST(LIBEXSLT_VERSION_NUMBER)
-
-dnl
-dnl libxsltbreakpoint is a compatibility obsoleted library
-dnl it's blocked at 1.0.8 and should be removed in default build in the
-dnl future
-dnl
-
-LIBXSLTBREAK_MAJOR_VERSION=1
-LIBXSLTBREAK_MINOR_VERSION=0
-LIBXSLTBREAK_MICRO_VERSION=8
-
-LIBXSLTBREAK_VERSION=$LIBXSLTBREAK_MAJOR_VERSION.$LIBXSLTBREAK_MINOR_VERSION.$LIBXSLTBREAK_MICRO_VERSION
-LIBXSLTBREAK_VERSION_INFO=`expr $LIBXSLTBREAK_MAJOR_VERSION + $LIBXSLTBREAK_MINOR_VERSION`:$LIBXSLTBREAK_MICRO_VERSION:$LIBXSLTBREAK_MINOR_VERSION
-
-LIBXSLTBREAK_VERSION_NUMBER=`expr $LIBXSLTBREAK_MAJOR_VERSION \* 10000 + $LIBXSLTBREAK_MINOR_VERSION \* 100 + $LIBXSLTBREAK_MICRO_VERSION`
-
-AC_SUBST(LIBXSLTBREAK_MAJOR_VERSION)
-AC_SUBST(LIBXSLTBREAK_MINOR_VERSION)
-AC_SUBST(LIBXSLTBREAK_MICRO_VERSION)
-AC_SUBST(LIBXSLTBREAK_VERSION)
-AC_SUBST(LIBXSLTBREAK_VERSION_INFO)
-AC_SUBST(LIBXSLTBREAK_VERSION_NUMBER)
-
-
-
 
 VERSION=${LIBXSLT_VERSION}
 
@@ -171,7 +146,7 @@ if test "$with_python" != "no" ; then
     then
         PYTHON_VERSION=`$PYTHON -c "import sys; print sys.version[[0:3]]"`
 	echo Found Python version $PYTHON_VERSION
-	LIBXML2_PYTHON=`python -c "try : import libxml2 ; print 1
+	LIBXML2_PYTHON=`$PYTHON -c "try : import libxml2 ; print 1
 except: print 0"`
 	if test "$LIBXML2_PYTHON" = "1"
 	then
@@ -227,7 +202,9 @@ AC_SUBST(PYTHON_SUBDIR)
 dnl
 dnl Debug for DV (-Wunreachable-code)
 dnl
-if test "${LOGNAME}" = "veillard" -a "`pwd`" = "/u/veillard/XSLT" ; then
+if [[ "${LOGNAME}" = "veillard" -a "`pwd`" = "/u/veillard/XSLT" ]] || \
+   [[ "${LOGNAME}" = "bill" -a "`pwd`" = "/home/bill/gnomecvs/libxslt" ]]
+   then
     if test "${with_mem_debug}" = "" ; then
 	with_mem_debug="yes"
     fi
@@ -268,7 +245,6 @@ else
     WITH_DEBUGGER=1
     AC_DEFINE(WITH_DEBUGGER)
 fi
-AM_CONDITIONAL(WITH_DEBUGGER, test "${WITH_DEBUGGER}" = "1")
 AC_SUBST(WITH_DEBUGGER)
 
 dnl
@@ -302,6 +278,7 @@ AC_ARG_WITH(libxml-src,
 	[  --with-libxml-src=[DIR]              For libxml thats not installed yet (sets all three above)],
 	LIBXML_SRC="$withval"
 )
+AC_SUBST(LIBXML_SRC)
 
 dnl
 dnl where is xml2-config
@@ -386,22 +363,6 @@ AC_SUBST(CFLAGS)
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LDFLAGS)
 
-#
-# Some fun with prelinking :-(
-# try to check if there is already an installed shared lib of the same level
-#
-INSTALLED_XSLT_LIB=""
-if test -d $prefix
-then
-    shared_xslt_lib="$prefix/lib/libxslt.so.$LIBXSLT_MAJOR_VERSION"
-    shared_xslt_la="$prefix/lib/libxslt.la"
-    if test -f $shared_xslt_lib -a -f $shared_xslt_la
-    then
-	INSTALLED_XSLT_LIB="-L$libdir -lxslt"
-    fi
-fi
-AC_SUBST(INSTALLED_XSLT_LIB)
-
 dnl
 dnl In build tree I use a static version with memory debug enabled
 dnl
@@ -454,8 +415,10 @@ dnl for the spec file
 RELDATE=`date +'%a %b %e %Y'`
 AC_SUBST(RELDATE)
 
+( cd $srcdir
 rm -f COPYING.LIB COPYING
-ln -s Copyright COPYING
+$LN_S Copyright COPYING
+)
 
 
 AC_OUTPUT([
@@ -464,7 +427,6 @@ libxslt.pc
 libxslt/Makefile
 libxslt/xsltconfig.h
 libxslt/xsltwin32config.h
-breakpoint/Makefile
 libexslt/Makefile
 libexslt/exsltconfig.h
 xsltproc/Makefile

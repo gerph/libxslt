@@ -331,9 +331,7 @@ xsltRegisterExtPrefix(xsltStylesheetPtr style,
 
 	module = xmlHashLookup(xsltExtensionsHash, URI);
 	if (module != NULL) {
-	    xsltExtDataPtr data;
-
-	    data = xsltStyleGetExtData(style, URI);
+	    xsltStyleGetExtData(style, URI);
 	}
     }
     return(0);
@@ -701,8 +699,6 @@ xsltShutdownCtxtExt(xsltExtDataPtr data, xsltTransformContextPtr ctxt,
                      "Shutting down module : %s\n", URI);
 #endif
     module->shutdownFunc(ctxt, URI, data->extData);
-    xmlHashRemoveEntry(ctxt->extInfos, URI,
-                       (xmlHashDeallocator) xsltFreeExtData);
 }
 
 /**

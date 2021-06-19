@@ -1,0 +1,20 @@
+| !~UpdateH
+| Utility to merge files between two different versions, the last version,
+| the RISC OS version of that, and the new unix version
+
+Set FromFile %0
+If "%1" <> "" Then Set ToFile %1 Else Set ToFile %0
+Echo *** Processing %0
+
+| Do diff of last version
+gnudiff -P -w -C 2 <LastOriginal>.<FromFile> <LastRISCOS>.<ToFile> > diffs.<ToFile>
+
+| Remove any files left behind by a previous attempt
+remove <ThisRISCOS>.<ToFile>
+remove <ThisRISCOS>.<ToFile>/rej
+
+| Patch against latest version
+do patch -E -l -o <ThisRISCOS>.<ToFile> -r <ThisRISCOS>.<ToFile>/rej <ThisOriginal>.<FromFile> diffs.<ToFile>
+perl -e "if (-z '<ThisRISCOS>.<ToFile>') { unlink '<ThisRISCOS>.<ToFile>'; }"
+
+IfThere <ThisRISCOS>.<ToFile> Then Else Copy <ThisOriginal>.<FromFile> <ThisRISCOS>.<ToFile> ~C~V~DF

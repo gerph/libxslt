@@ -1,0 +1,105 @@
+dir <Obey$Dir>
+cdir RISCOS
+cdir RISCOS.o32
+cdir RISCOS.aif
+cdir RISCOS.breakpoint
+cdir RISCOS.breakpoint.c
+cdir RISCOS.breakpoint.h
+cdir RISCOS.breakpoint.o32
+cdir RISCOS.libxslt
+cdir RISCOS.libxslt.c
+cdir RISCOS.libxslt.h
+cdir RISCOS.libxslt.o32
+cdir RISCOS.libexslt
+cdir RISCOS.libexslt.c
+cdir RISCOS.libexslt.h
+cdir RISCOS.libexslt.o32
+cdir RISCOS.xsltproc
+cdir RISCOS.xsltproc.c
+cdir RISCOS.xsltproc.h
+cdir RISCOS.xsltproc.o32
+cdir diffs
+cdir diffs.libxslt
+cdir diffs.libxslt.c
+cdir diffs.libxslt.h
+cdir diffs.libexslt
+cdir diffs.libexslt.c
+cdir diffs.libexslt.h
+cdir diffs.xsltproc
+cdir diffs.xsltproc.c
+cdir diffs.xsltproc.h
+
+Obey <Obey$Dir>.!~Setup
+
+IfThere <ThisRISCOS>.Makefile Then Error Diff and Patch already applied
+
+alias apply Obey !~UpdateH %%*0
+
+| C code
+apply libxslt.c.attributes
+apply libxslt.c.documents
+apply libxslt.c.extensions
+apply libxslt.c.extra
+apply libxslt.c.functions
+apply libxslt.c.imports
+apply libxslt.c.keys
+apply libxslt.c.namespaces
+apply libxslt.c.numbers
+apply libxslt.c.pattern
+apply libxslt.c.preproc
+apply libxslt.c.security
+apply libxslt.c.templates
+apply libxslt.c.transform
+apply libxslt.c.variables
+apply libxslt.c.xslt
+apply libxslt.c.xsltutils
+apply libexslt.c.common
+apply libexslt.c.date
+apply libexslt.c.dynamic
+apply libexslt.c.exslt
+apply libexslt.c.functions
+apply libexslt.c.math
+apply libexslt.c.sets
+apply libexslt.c.saxon
+apply libexslt.c.strings
+apply xsltproc.c.xsltproc
+apply xsltproc.c.throwback
+
+| Headers
+apply libxslt.h.config
+apply libxslt.h.attributes
+apply libxslt.h.documents
+apply libxslt.h.extensions
+apply libxslt.h.extra
+apply libxslt.h.functions
+apply libxslt.h.imports
+apply libxslt.h.keys
+apply libxslt.h.libxslt
+apply libxslt.h.namespaces
+apply libxslt.h.numbersInternals
+apply libxslt.h.pattern
+apply libxslt.h.preproc
+apply libxslt.h.security
+apply libxslt.h.templates
+apply libxslt.h.transform
+apply libxslt.h.variables
+apply libxslt.h.win32config
+apply libxslt.h.xslt
+apply libxslt.h.xsltconfig
+apply libxslt.h.xsltexports
+apply libxslt.h.xsltInternals
+apply libxslt.h.xsltutils
+apply libxslt.h.xsltwin32config
+apply libexslt.h.exslt
+apply libexslt.h.exsltconfig
+apply libexslt.h.exsltexports
+apply libexslt.h.libexslt
+apply xsltproc.h.throwback
+
+| Final bits
+Copy <LastRISCOS>.Makefile <ThisRISCOS>.Makefile ~C~V~DF
+Copy <LastRISCOS>.libexslt.Makefile <ThisRISCOS>.libexslt.Makefile ~C~V~DF
+Copy <LastRISCOS>.libxslt.Makefile <ThisRISCOS>.libxslt.Makefile ~C~V~DF
+| Copy <LastRISCOS>.xsltproc.Makefile <ThisRISCOS>.xsltproc.Makefile ~C~V~DF
+
+echo [Update complete]

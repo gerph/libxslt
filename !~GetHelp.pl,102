@@ -1,0 +1,14 @@
+#! /usr/bin/perl
+
+# Command:
+#   <command to run, with spaces as *s>
+#
+$cmd="\@." . shift;
+$cmd=~ s/\*/ /;
+$line=`$cmd`;
+$line=~ s/\@\.//;
+$line=~ s/\r//g;
+$line=~ s/^\t([^\n]*?) ?: /  $1\t/mg;
+$line=~ s/\n\t( +)/ /mg;
+$line=~ s/^(  [^\t\n]{14,})\t/$1\n\t\t/g;
+print "$line";

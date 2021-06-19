@@ -63,9 +63,15 @@ double xmlXPathStringEvalNumber(const xmlChar *str);
  */
 
 #undef IS_BLANK
+#ifdef  IS_BLANK
+#undef	IS_BLANK
+#endif
 #define IS_BLANK(c) (((c) == 0x20) || ((c) == 0x09) || ((c) == 0xA) ||	\
                      ((c) == 0x0D))
 
+#ifdef	IS_BLANK_NODE
+#undef	IS_BLANK_NODE
+#endif
 #define IS_BLANK_NODE(n)						\
     (((n)->type == XML_TEXT_NODE) && (xsltIsBlank((n)->content)))
 
@@ -186,7 +192,7 @@ xsltNewDecimalFormat(xmlChar *name)
     if (self != NULL) {
 	self->next = NULL;
 	self->name = name;
-
+	
 	/* Default values */
 	self->digit = xmlStrdup(BAD_CAST("#"));
 	self->patternSeparator = xmlStrdup(BAD_CAST(";"));
@@ -240,7 +246,7 @@ xsltFreeDecimalFormatList(xsltStylesheetPtr self)
 
     if (self == NULL)
 	return;
-
+    
     iter = self->decimalFormat;
     while (iter != NULL) {
 	tmp = iter->next;
@@ -528,7 +534,7 @@ xsltFreeStylesheet(xsltStylesheetPtr sheet)
  * @template: the template
  * @node:  the current node
  *
- * Search all the namespace applying to a given element except the ones
+ * Search all the namespace applying to a given element except the ones 
  * from excluded output prefixes currently in scope. Initialize the
  * template inheritedNs list with it.
  *
@@ -802,12 +808,12 @@ xsltParseStylesheetDecimalFormat(xsltStylesheetPtr style, xmlNodePtr cur)
     xmlChar *prop;
     xsltDecimalFormatPtr format;
     xsltDecimalFormatPtr iter;
-
+    
     if ((cur == NULL) || (style == NULL))
 	return;
 
     format = style->decimalFormat;
-
+    
     prop = xsltGetNsProp(cur, BAD_CAST("name"), XSLT_NAMESPACE);
     if (prop != NULL) {
 	format = xsltDecimalFormatGetByName(style, prop);
@@ -837,7 +843,7 @@ xsltParseStylesheetDecimalFormat(xsltStylesheetPtr style, xmlNodePtr cur)
 	if (format->decimalPoint != NULL) xmlFree(format->decimalPoint);
 	format->decimalPoint  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"grouping-separator",
 	                XSLT_NAMESPACE);
     if (prop != NULL) {
@@ -850,43 +856,43 @@ xsltParseStylesheetDecimalFormat(xsltStylesheetPtr style, xmlNodePtr cur)
 	if (format->infinity != NULL) xmlFree(format->infinity);
 	format->infinity  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"minus-sign", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->minusSign != NULL) xmlFree(format->minusSign);
 	format->minusSign  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"NaN", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->noNumber != NULL) xmlFree(format->noNumber);
 	format->noNumber  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"percent", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->percent != NULL) xmlFree(format->percent);
 	format->percent  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"per-mille", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->permille != NULL) xmlFree(format->permille);
 	format->permille  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"zero-digit", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->zeroDigit != NULL) xmlFree(format->zeroDigit);
 	format->zeroDigit  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"digit", XSLT_NAMESPACE);
     if (prop != NULL) {
 	if (format->digit != NULL) xmlFree(format->digit);
 	format->digit  = prop;
     }
-
+    
     prop = xsltGetNsProp(cur, (const xmlChar *)"pattern-separator",
 	                XSLT_NAMESPACE);
     if (prop != NULL) {
@@ -1253,7 +1259,7 @@ skip_children:
 	    cur = cur->next;
 	    continue;
 	}
-
+	
 	do {
 	    cur = cur->parent;
 	    if (cur == NULL)
@@ -1292,7 +1298,7 @@ xsltGatherNamespaces(xsltStylesheetPtr style) {
     xmlNodePtr cur;
     const xmlChar *URI;
 
-    /*
+    /* 
      * TODO: basically if the stylesheet uses the same prefix for different
      *       patterns, well they may be in problem, hopefully they will get
      *       a warning first.
@@ -1344,7 +1350,7 @@ xsltGatherNamespaces(xsltStylesheetPtr style) {
 	    cur = cur->next;
 	    continue;
 	}
-
+	
 	do {
 	    cur = cur->parent;
 	    if (cur == NULL)
@@ -1397,7 +1403,7 @@ xsltParseTemplateContent(xsltStylesheetPtr style, xmlNodePtr templ) {
 		    xmlChar *prop;
 		    xmlNodePtr text = cur->children, next;
 		    int noesc = 0;
-
+			
 		    prop = xsltGetNsProp(cur,
 			    (const xmlChar *)"disable-output-escaping",
 					XSLT_NAMESPACE);
@@ -1474,7 +1480,7 @@ skip_children:
 	    cur = cur->next;
 	    continue;
 	}
-
+	
 	do {
 	    cur = cur->parent;
 	    if (cur == NULL)
@@ -1699,6 +1705,12 @@ xsltParseStylesheetTemplate(xsltStylesheetPtr style, xmlNodePtr template) {
 	    if (style != NULL) style->errors++;
 	    goto error;
 	} else {
+	    if (xmlValidateNCName(prop,0)) {
+	        xsltTransformError(NULL, style, template,
+	            "xsl:template : error invalid name '%s'\n", prop);
+		if (style != NULL) style->errors++;
+		goto error;
+	    } 
 	    ret->name = prop;
 	    if (URI != NULL)
 		ret->nameURI = xmlStrdup(URI);
@@ -1879,7 +1891,7 @@ xsltParseStylesheetProcess(xsltStylesheetPtr ret, xmlDocPtr doc) {
 	return(NULL);
     if (ret == NULL)
 	return(ret);
-
+    
     /*
      * First steps, remove blank nodes,
      * locate the xsl:stylesheet element and the
@@ -1894,7 +1906,7 @@ xsltParseStylesheetProcess(xsltStylesheetPtr ret, xmlDocPtr doc) {
     xsltParseStylesheetExcludePrefix(ret, cur);
     xsltPrecomputeStylesheet(ret, cur);
 
-    if ((IS_XSLT_ELEM(cur)) &&
+    if ((IS_XSLT_ELEM(cur)) && 
 	((IS_XSLT_NAME(cur, "stylesheet")) ||
 	 (IS_XSLT_NAME(cur, "transform")))) {
 #ifdef WITH_XSLT_DEBUG_PARSING
@@ -1921,7 +1933,7 @@ xsltParseStylesheetProcess(xsltStylesheetPtr ret, xmlDocPtr doc) {
         xsltGenericDebug(xsltGenericDebugContext,
 		"xsltParseStylesheetProcess : document is stylesheet\n");
 #endif
-
+	
 	if (!xmlStrEqual(prop, (const xmlChar *)"1.0")) {
 	    xsltTransformError(NULL, ret, cur,
 		"xsl:version: only 1.0 features are supported\n");
@@ -1973,7 +1985,7 @@ xsltParseStylesheetImportedDoc(xmlDocPtr doc) {
     ret = xsltNewStylesheet();
     if (ret == NULL)
 	return(NULL);
-
+    
     ret->doc = doc;
     xsltGatherNamespaces(ret);
     if (xsltParseStylesheetProcess(ret, doc) == NULL) {
@@ -1988,7 +2000,7 @@ xsltParseStylesheetImportedDoc(xmlDocPtr doc) {
 	    ret = NULL;
 	}
     }
-
+    
     return(ret);
 }
 
@@ -2028,7 +2040,7 @@ xsltParseStylesheetFile(const xmlChar* filename) {
     xsltSecurityPrefsPtr sec;
     xsltStylesheetPtr ret;
     xmlDocPtr doc;
-
+    
 
     if (filename == NULL)
 	return(NULL);
@@ -2054,7 +2066,11 @@ xsltParseStylesheetFile(const xmlChar* filename) {
 	}
     }
 
+#ifdef XSLT_PARSE_OPTIONS
+    doc = xmlReadFile((const char *) filename, NULL, XSLT_PARSE_OPTIONS);
+#else
     doc = xmlParseFile((const char *) filename);
+#endif
     if (doc == NULL) {
 	xsltTransformError(NULL, NULL, NULL,
 		"xsltParseStylesheetFile : cannot parse %s\n", filename);
@@ -2125,7 +2141,7 @@ xsltParseStylesheetPI(const xmlChar *value) {
 		continue;
 	    val = xmlStrndup(start, cur - start);
 	    NEXT;
-	    if (val == NULL)
+	    if (val == NULL) 
 		return(NULL);
 	    if ((xmlStrcasecmp(val, BAD_CAST "text/xml")) &&
 		(xmlStrcasecmp(val, BAD_CAST "text/xsl"))) {
@@ -2157,7 +2173,7 @@ xsltParseStylesheetPI(const xmlChar *value) {
 	    while ((CUR != 0) && (!IS_BLANK(CUR)))
 		NEXT;
 	}
-
+            
     }
 
     if (!isXml) {
@@ -2173,7 +2189,7 @@ xsltParseStylesheetPI(const xmlChar *value) {
  * @doc:  a document to process
  *
  * This function tries to locate the stylesheet PI in the given document
- * If found, and if contained within the document, it will extract
+ * If found, and if contained within the document, it will extract 
  * that subtree to build the stylesheet to process @doc (doc itself will
  * be modified). If found but referencing an external document it will
  * attempt to load it and generate a stylesheet from it. In both cases,
@@ -2249,6 +2265,14 @@ xsltLoadStylesheetPI(xmlDocPtr doc) {
 		subtree = ID->parent;
 		fake = xmlNewDoc(NULL);
 		if (fake != NULL) {
+#if LIBXML_VERSION >= 20600
+                    /*
+		     * the dictionnary should be shared since nodes are
+		     * moved over.
+		     */
+		    fake->dict = doc->dict;
+		    xmlDictReference(doc->dict);
+#endif
 		    xmlUnlinkNode(subtree);
 		    xmlAddChild((xmlNodePtr) fake, subtree);
 		    ret = xsltParseStylesheetDoc(fake);
