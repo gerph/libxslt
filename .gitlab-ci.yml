@@ -25,11 +25,11 @@ cross-compile:
 
     - |
       cd RISCOS/Release
-      zip -9r ../archive.zip *
+      zip -9r ../../archive.zip *
       cd ../..
 
     - |
-      version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
+      version=$(sed '/MajorVersion / ! d ; s/.*MajorVersion *"\(.*\)"/\1/' RISCOS/xsltproc/VersionNum)
       version=$version-$(git rev-parse --short HEAD)
       echo "This is version: $version"
       mv archive.zip LibXSLT-$version.zip
@@ -62,7 +62,7 @@ cross-compile:
       ./riscos-build-online -i /tmp/source-archive.zip -a off -s ws://backend0.build.riscos.online:13254/ -t 1800 -o /tmp/built
 
     - |
-      version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
+      version=$(sed '/MajorVersion / ! d ; s/.*MajorVersion *"\(.*\)"/\1/' RISCOS/xsltproc/VersionNum)
       version=$version-$(git rev-parse --short HEAD)
       echo "This is version: $version"
       if [ -f /tmp/built,a91 ] ; then

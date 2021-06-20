@@ -39,7 +39,7 @@
     - `git add libxslt/c/* libxslt/h/* libexslt/c/* libexslt/h/* xsltproc/c/* xsltproc/h/*`
 - Commit the merged version of the vendor branch.
     - `git commit`
-- Update the `VersionNum` file with a new version number.
+- Update the `VersionNum` file in the `xsltproc` directory with a new version number.
 - Test the new version and add any changed files.
 - Commit changes to the merging branch.
     - `git commit`

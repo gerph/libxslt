@@ -7,7 +7,7 @@
  */
 
 /* Gerph's port version */
-#define PORTVERSION "1.39"
+#include "VersionNum"
 
 #include "libxslt/libxslt.h"
 #include "libxslt/xsltconfig.h"
@@ -742,7 +742,7 @@ main(int argc, char **argv)
             printf("libexslt %d was compiled against libxml %d\n",
                    exsltLibexsltVersion, exsltLibxmlVersion);
 #ifdef __riscos
-            printf("RISC OS port "PORTVERSION" ("__DATE__ ") "
+            printf("RISC OS port " Module_MajorVersion " ("__DATE__ ") "
                    "by Gerph\n");
 #endif
         } else if ((!strcmp(argv[i], "-repeat"))

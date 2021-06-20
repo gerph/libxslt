@@ -15,7 +15,7 @@ mkdir -p "${RELEASE_DIR}"
 mkdir -p "${RELEASE_DIR}/Lib"
 mkdir -p "${RELEASE_DIR}/Tools/XML/Help"
 
-cp xsltproc/inst/xsltproc,ff8 "${RELEASE_DIR}/Tools/XML/XSLTProc,ff8"
+cp xsltproc/inst/XSLTProc,ff8 "${RELEASE_DIR}/Tools/XML/XSLTProc,ff8"
 cp ../upstream/COPYING "${RELEASE_DIR}/COPYING"
 cp -R "${LIB_DIR}/libxslt" "${RELEASE_DIR}/Lib/libxslt"
 cp -R "${LIB_DIR}/libexslt" "${RELEASE_DIR}/Lib/libexslt"
@@ -45,6 +45,6 @@ cp xsltproc/inst/* help-extract,feb "$tmpdir/"
 )
 
 # Now process those messages into our help.
-./help-conversion.pl "$tmpdir/xsltproc-help" "${RELEASE_DIR}/Tools/XML/Help/XMLLint" "$tmpdir/xsltproc-version"
+./help-conversion.pl "$tmpdir/xsltproc-help" "${RELEASE_DIR}/Tools/XML/Help/XSLTProc" "$tmpdir/xsltproc-version"
 
 rm -rf "$tmpdir"
