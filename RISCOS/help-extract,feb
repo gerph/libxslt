@@ -1,0 +1,5 @@
+| Script to get help from the built tools
+cdir Output
+xsltproc > Output.xsltproc-help
+xsltproc --version > Output.xsltproc-version
+set Sys$ReturnCode 0

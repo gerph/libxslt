@@ -19,24 +19,14 @@ cross-compile:
       cd ../..
 
     - |
-      cd RISCOS/libxslt
-      riscos-amu -f MakefileLib,fe1 export
-      cd ../libexslt
-      riscos-amu -f MakefileLib,fe1 export
-      cd ../xsltproc
-      riscos-amu -f MakefileTools,fe1
-      cd ../..
+      cd RISCOS
+      ./build-release.sh
+      cd ..
 
     - |
-      mkdir -p Release/Tools
-      cp RISCOS/xsltproc/aif32/XSLTProc,ff8 Release/Tools/XSLTProc,ff8
-
-      mkdir -p Release/Libs
-      cp -R $LIB_DIR/libxslt Release/Libs/libxslt
-      cp -R $LIB_DIR/libexslt Release/Libs/libexslt
-      cd Release
+      cd RISCOS/Release
       zip -9r ../archive.zip *
-      cd ..
+      cd ../..
 
     - |
       version=$(sed '/define PORTVERSION/ ! d ; s/.*PORTVERSION *"\(.*\)"/\1/' RISCOS/xsltproc/c/xsltproc)
