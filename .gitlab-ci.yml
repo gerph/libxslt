@@ -1,4 +1,4 @@
-# RISC OS CI build for libxslt.
+# RISC OS CI build for libxslt library and tool.
 #
 
 # Enable submodules
@@ -23,24 +23,44 @@ cross-compile:
       ./build-release.sh
       cd ..
 
+  artifacts:
+      paths:
+          - RISCOS
+      expire_in: 1 day
+
+  tags:
+    - riscos
+
+#### Build archive by making the zip in RISC OS format
+archive:
+  stage: archive
+  dependencies:
+    - cross-compile
+
+  script:
     - |
       cd RISCOS/Release
-      zip -9r ../../archive.zip *
+      # Archive the release files in RISC OS format
+      pip install --user rozipinfo
+      python -m rozipfile --verbose --create ../../archive.zip *
+      echo RISC OS archive contents:
+      python -m rozipfile --list ../../archive.zip
       cd ../..
 
     - |
+      # If we wanted to version it by the library version, we could use this
+      libxslt_version=$(sed '/define LIBXSLT_DOTTED_VERSION/ ! d ; s/.*LIBXSLT_DOTTED_VERSION *"\(.*\)"/\1/' RISCOS/libxslt/h/xsltconfig)
+      # Except, I've been versioning the earlier versions with port version numbers.
+      # So let's use that.
       version=$(sed '/MajorVersion / ! d ; s/.*MajorVersion *"\(.*\)"/\1/' RISCOS/xsltproc/VersionNum)
       version=$version-$(git rev-parse --short HEAD)
-      echo "This is version: $version"
+      echo "This is version: $version (of LibXSLT $libxslt_version)"
       mv archive.zip LibXSLT-$version.zip
 
   artifacts:
       when: always
       paths:
           - LibXSLT-*.zip
-
-  tags:
-    - riscos
 
 
 #### Build with build service ####
@@ -62,9 +82,13 @@ cross-compile:
       ./riscos-build-online -i /tmp/source-archive.zip -a off -s ws://backend0.build.riscos.online:13254/ -t 1800 -o /tmp/built
 
     - |
+      # If we wanted to version it by the library version, we could use this
+      libxslt_version=$(sed '/define LIBXSLT_DOTTED_VERSION/ ! d ; s/.*LIBXSLT_DOTTED_VERSION *"\(.*\)"/\1/' RISCOS/libxslt/h/xsltconfig)
+      # Except, I've been versioning the earlier versions with port version numbers.
+      # So let's use that.
       version=$(sed '/MajorVersion / ! d ; s/.*MajorVersion *"\(.*\)"/\1/' RISCOS/xsltproc/VersionNum)
       version=$version-$(git rev-parse --short HEAD)
-      echo "This is version: $version"
+      echo "This is version: $version (of LibXSLT $libxslt_version)"
       if [ -f /tmp/built,a91 ] ; then
           cp /tmp/built,a91 "LibXSLT-$version.zip"
       else
@@ -84,3 +108,4 @@ cross-compile:
 #### Stages to execute ####
 stages:
   - build
+  - archive
