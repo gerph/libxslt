@@ -20,3 +20,15 @@ echo *** Test transformation through catalog
 Set XML$CatalogFiles testdata.3-catalog
 /xsltproc.aif32.xsltproc http://gerph.example/dtd/1-simplexslt testdata/simplexml
 If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc http://gerph.example/dtd/1-simplexslt testdata/simplexml'
+
+echo *** Test message from xslt
+/xsltproc.aif32.xsltproc testdata/4-message testdata/simplexml
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc testdata/4-message testdata/simplexml'
+
+echo *** Test error in xslt
+/xsltproc.aif32.xsltproc testdata/5-error testdata/simplexml
+If "<Sys$ReturnCode>" = "0" Then Error Failed at 'xsltproc testdata/5-error testdata/simplexml' (should have given RC=0, but got <Sys$ReturnCode>)
+
+echo *** Test error with throwback in xslt
+/xsltproc.aif32.xsltproc --throwback testdata/5-error testdata/simplexml
+If "<Sys$ReturnCode>" = "0" Then Error Failed at 'xsltproc --throwback testdata/5-error testdata/simplexml' (should have given RC=0, but got <Sys$ReturnCode>)
