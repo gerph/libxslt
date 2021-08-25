@@ -31,9 +31,34 @@ cross-compile:
   tags:
     - riscos
 
+
+#### Test by running this on build.riscos.online
+test:
+  stage: test
+  needs:
+    - cross-compile
+  dependencies:
+    - cross-compile
+
+  script:
+    - |
+      cd RISCOS
+      # Zip up the source to send to robuild
+      zip -q9r /tmp/source-archive.zip xsltproc/aif32 ROTest,feb testdata .robuild.yaml
+
+      # Fetch the build client
+      curl -s -L -o riscos-build-online https://github.com/gerph/robuild-client/releases/download/v0.05/riscos-build-online && chmod +x riscos-build-online
+
+      # Send the archive file to build service
+      # Note: This is being sent directly to the back end to avoid the gateway that times out at 10 minutes.
+      ./riscos-build-online -i /tmp/source-archive.zip -a off -o /tmp/built
+
+
 #### Build archive by making the zip in RISC OS format
 archive:
   stage: archive
+  needs:
+    - cross-compile
   dependencies:
     - cross-compile
 
@@ -108,4 +133,5 @@ archive:
 #### Stages to execute ####
 stages:
   - build
+  - test
   - archive

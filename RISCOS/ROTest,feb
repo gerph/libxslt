@@ -1,0 +1,22 @@
+| Run RISC OS xslt to check it's working properly.
+
+echo *** Test binary runs
+/xsltproc.aif32.xsltproc --version
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc --version'
+
+echo *** Test null transformation
+/xsltproc.aif32.xsltproc testdata/1-simplexslt testdata/simplexml
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc testdata/1-simplexslt testdata/simplexml'
+
+echo *** Test templated transformation
+/xsltproc.aif32.xsltproc testdata/2-templated testdata/simplexml
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc testdata/2-templated testdata/simplexml'
+
+echo *** Test native filename switch
+/xsltproc.aif32.xsltproc --native testdata.2-templated testdata.simplexml
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc testdata.2-templated testdata.simplexml'
+
+echo *** Test transformation through catalog
+Set XML$CatalogFiles testdata.3-catalog
+/xsltproc.aif32.xsltproc http://gerph.example/dtd/1-simplexslt testdata/simplexml
+If "<Sys$ReturnCode>" <> "0" Then Error Failed at 'xsltproc http://gerph.example/dtd/1-simplexslt testdata/simplexml'

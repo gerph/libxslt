@@ -1,0 +1,19 @@
+<xsl:stylesheet version = '1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>
+
+    <xsl:template match="@*|node()">
+        <xsl:copy>
+            <xsl:apply-templates select="@*|node()"/>
+        </xsl:copy>
+    </xsl:template>
+
+    <xsl:template match="entry">
+        <entry>
+            <xsl:attribute name="name">
+                <xsl:value-of select="name/text()"/>
+            </xsl:attribute>
+            <xsl:attribute name="email">
+                <xsl:value-of select="email/text()"/>
+            </xsl:attribute>
+        </entry>
+    </xsl:template>
+</xsl:stylesheet>
