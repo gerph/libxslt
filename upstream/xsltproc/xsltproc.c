@@ -642,11 +642,13 @@ static void usage(const char *name) {
 #ifdef LIBXML_CATALOG_ENABLED
 #ifdef __riscos
     printf("\t--catalogs : use the catalogs from SGML$CatalogFiles\n");
+    printf("\t             otherwise XML Catalogs starting from \n");
+    printf("\t             XML$CatalogFiles are activated by default\n");
 #else
     printf("\t--catalogs : use SGML catalogs from $SGML_CATALOG_FILES\n");
-#endif
     printf("\t             otherwise XML Catalogs starting from \n");
     printf("\t         file:///etc/xml/catalog are activated by default\n");
+#endif
 #endif
 #ifdef LIBXML_XINCLUDE_ENABLED
     printf("\t--xinclude : do XInclude processing on document input\n");
@@ -726,7 +728,19 @@ main(int argc, char **argv)
             i++;
 #if defined(_WIN32) || defined (__CYGWIN__)
 	    output = (char *) xmlCanonicPath((xmlChar *) argv[i]);
+        if (output == NULL)
+#endif
+#ifdef __riscos
+        if (native)
+        {
+            output = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
             if (output == NULL)
+            {
+              fprintf(stderr, "not enough memory for filename translation\n");
+              exit(1);
+            }
+        }
+        else
 #endif
 		output = (char *) xmlStrdup((xmlChar *) argv[i]);
         } else if ((!strcmp(argv[i], "-V")) ||
@@ -1008,18 +1022,18 @@ main(int argc, char **argv)
             continue;
         }
         if ((argv[i][0] != '-') || (strcmp(argv[i], "-") == 0)) {
-            if (timing)
 #ifdef __riscos
-                if (native)
-                {
-                  argv[i] = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
-                  if (argv[i] == NULL)
-                  {
-                    fprintf(stderr, "not enough memory for filename translation\n");
-                    exit(1);
-                  }
-                }
+            if (native)
+            {
+              argv[i] = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
+              if (argv[i] == NULL)
+              {
+                fprintf(stderr, "not enough memory for filename translation\n");
+                exit(1);
+              }
+            }
 #endif
+            if (timing)
                 startTimer();
 	    style = xmlReadFile((const char *) argv[i], NULL, options);
             if (timing)
@@ -1086,6 +1100,17 @@ main(int argc, char **argv)
     if ((cur != NULL) && (cur->errors == 0)) {
         for (; i < argc; i++) {
 	    doc = NULL;
+#ifdef __riscos
+            if (native)
+            {
+              argv[i] = (char *)xmlStrdup((xmlChar*)unixfilename(argv[i]));
+              if (argv[i] == NULL)
+              {
+                fprintf(stderr, "not enough memory for filename translation\n");
+                exit(1);
+              }
+            }
+#endif
             if (timing)
                 startTimer();
 #ifdef LIBXML_HTML_ENABLED
